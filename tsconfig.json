@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "sourceMap": true,
+    "downlevelIteration": true,
+    "target": "es5",
+    "module": "esnext",
+    "moduleResolution": "node",
+    "jsx": "react",
+    "allowSyntheticDefaultImports": true,
+    "lib": [
+      "esnext",
+      "dom",
+      "webworker"
+    ]
+  }
+}
