@@ -19,7 +19,7 @@ function parseFormula(exp: string) {
   const zero = mode.includes('=')
   const func = {
     value: eval(astToValueFunctionCode(ast, ['x', 'y'])),
-    range: eval(astToRangeFunctionCode(ast, ['x', 'y'], { pos: positive, neg: negative })),
+    range: eval(astToRangeFunctionCode(ast, ['x', 'y'], { pos: positive, neg: negative, eq: zero, zero })),
   }
   return { func, mode: { positive, negative, zero } }
 }
@@ -50,7 +50,9 @@ function render(
   const defaultFillAlpha = 0.5
   ctx.globalAlpha = defaultFillAlpha
   function fill(xMin: number, yMin: number, size: number) {
+    ctx.globalAlpha = 0.4+0.6*Math.random()
     ctx.fillRect(xOffset + xFactor * xMin, yOffset + yFactor * yMin, size, size)
+    ctx.globalAlpha = defaultFillAlpha
   }
   function fillDotWithOpacity(xMin: number, yMin: number, opacity: number) {
     ctx.globalAlpha = opacity * defaultFillAlpha
@@ -68,15 +70,16 @@ function render(
     const v01 = fValue(x0, y1)
     const v10 = fValue(x1, y0)
     const v11 = fValue(x1, y1)
-    if (fillMode.zero && v00 === 0 && v01 === 0 && v10 === 0 && v11 === 0) {
-      fill(xMin, yMin, 1)
-    } else if (fillMode.negative) {
-      const alpha = ((v00 <= 0 ? 1 : 0) + (v01 <= 0 ? 1 : 0) + (v10 <= 0 ? 1 : 0) + (v11 <= 0 ? 1 : 0)) / 4
-      if (alpha > 0) fillDotWithOpacity(xMin, yMin, alpha)
-    } else {
-      const alpha = ((v00 >= 0 ? 1 : 0) + (v01 >= 0 ? 1 : 0) + (v10 >= 0 ? 1 : 0) + (v11 >= 0 ? 1 : 0)) / 4
-      if (alpha > 0) fillDotWithOpacity(xMin, yMin, alpha)
+    let alpha = 0
+    if (fillMode.zero) {
+      alpha += ((v00 === 0 ? 1 : 0) + (v01 === 0 ? 1 : 0) + (v10 === 0 ? 1 : 0) + (v11 === 0 ? 1 : 0)) / 4
     }
+    if (fillMode.negative) {
+      alpha += ((v00 < 0 ? 1 : 0) + (v01 < 0 ? 1 : 0) + (v10 < 0 ? 1 : 0) + (v11 < 0 ? 1 : 0)) / 4
+    } else if (fillMode.positive) {
+      alpha += ((v00 > 0 ? 1 : 0) + (v01 > 0 ? 1 : 0) + (v10 > 0 ? 1 : 0) + (v11 > 0 ? 1 : 0)) / 4
+    }
+    if (alpha > 0) fillDotWithOpacity(xMin, yMin, alpha)
   }
   function calcFull(xMin: number, xMax: number, yMin: number, yMax: number, size: number) {
     const dx = (xMax - xMin) / size
@@ -137,6 +140,9 @@ function render(
       const result = fRange(xMin, xMax, yMin, yMax)
       if (result >= 0) {
         if (((fillMask >> result) & 1) === 1) fill(xMin, yMin, currentSize)
+        else {
+          ctx.fillStyle='yellow';fill(xMin, yMin, currentSize);ctx.fillStyle='black'
+        }
       } else if (result === BOTH && currentSize <= 8) {
         calcFull(xMin, xMax, yMin, yMax, currentSize)
       } else if (currentSize > 1) {
@@ -168,7 +174,8 @@ function render(
 }
 
 onload = () => {
-  const { func, mode } = parseFormula('(x*x+y*y-1+sin(5theta)/3)*(y-tan(4x-siny))<0√(y+1-xx)')
+  const { func, mode } = parseFormula('(x*x+y*y-1+sin(5theta)/3)*(y-tan(4x-siny))*floor(x)<=0√(y+1-xx)')
+  // const { func, mode } = parseFormula('floor(x)(y-tanx)=0')
   // const { func, mode } = parseFormula('(x*x+y*y-1+sin(5theta)/3)<0')
   // const { func, mode } = parseFormula('tan(x-siny)-y<0')
   const canvas = document.createElement('canvas')
