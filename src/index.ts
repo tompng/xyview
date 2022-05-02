@@ -8,7 +8,8 @@ onload = () => {
   canvas.width = canvas.height = size + 2 * offset
 
   const t = performance.now()
-  render(canvas, size, offset, 2, func, { xMin: -2, yMin: -2, xMax: 2, yMax: 2 }, mode)
+  const range = { xMin: -2, yMin: -2, xMax: 2, yMax: 2 }
+  render(canvas, size, offset, range, func, mode, { color: 'blue', lineWidth: 2, fillAlpha: 0.5 })
   console.log(performance.now() - t)
 
   const t2 = performance.now()

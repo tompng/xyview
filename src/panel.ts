@@ -4,20 +4,55 @@ import {
   astToRangeFunctionCode,
   astToValueFunctionCode,
   presets2D,
+  UniqASTNode,
+  CompareMode,
   ValueFunction2D,
+  extractVariables,
   RangeFunction2D,
 } from 'numcore'
 
+function parseExpression(exp: string): [UniqASTNode, Exclude<CompareMode, null>] {
+  const argNames = ['x', 'y']
+  let parsed = parse(exp, argNames, presets2D)
+  const astEquals = (ast: UniqASTNode, arg: 'x' | 'y'): UniqASTNode => ({ op: '-', args: [arg, ast], uniqId: -1, uniqKey: '' })
+  if (parsed.type === 'var') {
+    const name = exp.split('=')[0]
+    parsed = parse([exp, name], argNames, presets2D)[1]
+    if (extractVariables(parsed.ast!).length === 2) throw `cannot render ${name}`
+  } else if (parsed.type === 'func' && parsed.ast) {
+    const funcPart = exp.split('=')[0]
+    const match = funcPart.match(/(.+)\(([^,]+)\)/)
+    const cannotRenderMessage = `cannot render ${funcPart}`
+    if (!match) throw cannotRenderMessage
+    const name = match[1]
+    const arg = match[2]
+    const deps = [...new Set([arg, ...extractVariables(parsed.ast)])]
+    if (deps.length >= 2) throw cannotRenderMessage
+    const funcCall = `${name}(${deps[0] === 'y' ? 'y' : 'x'})`
+    const axis = deps[0] === 'y' ? 'x' : 'y'
+    parsed = parse([exp, `${axis}=${funcCall}`], argNames, presets2D)[1]
+  }
+  if (parsed.error != null || parsed.ast == null) throw parsed.error
+  if (parsed.type !== 'eq') throw 'not an equation'
+  const args = extractVariables(parsed.ast)
+  if (parsed.mode == null) {
+    if (args.length >= 2) throw 'not an equation'
+    if (args.length === 0 || (args.length === 1 && args[0] === 'x')) {
+      return [astEquals(parsed.ast, 'y'), '=']
+    }
+    if (args.length === 1 && args[0] === 'y') {
+      return [astEquals(parsed.ast, 'x'), '=']
+    }
+    throw 'not an equation'
+  }
+  return [parsed.ast, parsed.mode]
+}
+
 export function parseFormula(exp: string) {
-  const parsed = parse(exp, ['x', 'y'], presets2D)
-  if (parsed.type !== 'eq' || parsed.mode == null) throw 'not an equation'
-  const { ast, error, mode } = parsed
-  console.log(ast, error, mode)
-  if (ast == null) throw error
+  const [ast, mode] = parseExpression(exp)
   const positive = mode.includes('>')
   const negative = mode.includes('<')
   const zero = mode.includes('=')
-  console.log(astToRangeFunctionCode(ast, ['x', 'y'], { pos: positive, neg: negative, eq: zero, zero }))
   const func = {
     value: eval(astToValueFunctionCode(ast, ['x', 'y'])),
     range: eval(astToRangeFunctionCode(ast, ['x', 'y'], { pos: positive, neg: negative, eq: zero, zero })),
@@ -30,13 +65,17 @@ export function render(
   canvas: HTMLCanvasElement,
   size: number,
   offset: number,
-  lineWidth: number,
-  func: { value: ValueFunction2D; range: RangeFunction2D },
   range: RenderingRange,
+  func: { value: ValueFunction2D; range: RangeFunction2D },
   fillMode: {
     positive?: boolean
     negative?: boolean
     zero?: boolean
+  },
+  renderMode: {
+    color: string
+    lineWidth: number
+    fillAlpha: number
   }
 ) {
   const xFactor = size / (range.xMax - range.xMin)
@@ -46,16 +85,17 @@ export function render(
   const fValue = func.value
   const fRange = func.range
   const ctx = canvas.getContext('2d')!
+  ctx.fillStyle = renderMode.color
   const { BOTH } = RangeResults
-  const defaultFillAlpha = 0.5
-  ctx.globalAlpha = defaultFillAlpha
+  const { fillAlpha, lineWidth } = renderMode
+  ctx.globalAlpha = fillAlpha
   function fill(xMin: number, yMin: number, size: number) {
     ctx.fillRect(xOffset + xFactor * xMin, yOffset + yFactor * yMin, size, size)
   }
   function fillDotWithOpacity(xMin: number, yMin: number, opacity: number) {
-    ctx.globalAlpha = opacity * defaultFillAlpha
+    ctx.globalAlpha = opacity * fillAlpha
     ctx.fillRect(xOffset + xFactor * xMin, yOffset + yFactor * yMin, 1, 1)
-    ctx.globalAlpha = defaultFillAlpha
+    ctx.globalAlpha = fillAlpha
   }
   const plotPoints: number[] = []
   function calcDot(xMin: number, xMax: number, yMin: number, yMax: number) {
@@ -164,6 +204,5 @@ export function render(
     ctx.arc(x, y, lineWidth / 2, 0, 2 * Math.PI, true)
   }
   ctx.globalAlpha = 1
-  console.log(plotPoints.length)
   ctx.fill()
 }
