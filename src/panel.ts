@@ -48,16 +48,24 @@ function parseExpression(exp: string): [UniqASTNode, Exclude<CompareMode, null>]
   return [parsed.ast, parsed.mode]
 }
 
-export function parseFormula(exp: string) {
+export type ParsedFormula = {
+  valueFunc: ValueFunction2D
+  rangeFunc: RangeFunction2D
+  mode: {
+    positive: boolean
+    negative: boolean
+    zero: boolean
+  }
+}
+
+export function parseFormula(exp: string): ParsedFormula {
   const [ast, mode] = parseExpression(exp)
   const positive = mode.includes('>')
   const negative = mode.includes('<')
   const zero = mode.includes('=')
-  const func = {
-    value: eval(astToValueFunctionCode(ast, ['x', 'y'])),
-    range: eval(astToRangeFunctionCode(ast, ['x', 'y'], { pos: positive, neg: negative, eq: zero, zero })),
-  }
-  return { func, mode: { positive, negative, zero } }
+  const valueFunc: ValueFunction2D = eval(astToValueFunctionCode(ast, ['x', 'y']))
+  const rangeFunc: RangeFunction2D = eval(astToRangeFunctionCode(ast, ['x', 'y'], { pos: positive, neg: negative, eq: zero, zero }))
+  return { valueFunc, rangeFunc, mode: { positive, negative, zero } }
 }
 
 type RenderingRange = { xMin: number; xMax: number; yMin: number; yMax: number }
@@ -66,12 +74,7 @@ export function render(
   size: number,
   offset: number,
   range: RenderingRange,
-  func: { value: ValueFunction2D; range: RangeFunction2D },
-  fillMode: {
-    positive?: boolean
-    negative?: boolean
-    zero?: boolean
-  },
+  formula: ParsedFormula,
   renderMode: {
     color: string
     lineWidth: number
@@ -82,8 +85,9 @@ export function render(
   const xOffset = offset - size * range.xMin / (range.xMax - range.xMin)
   const yFactor = size / (range.yMax - range.yMin)
   const yOffset = offset - size * range.yMin / (range.yMax - range.yMin)
-  const fValue = func.value
-  const fRange = func.range
+  const fValue = formula.valueFunc
+  const fRange = formula.rangeFunc
+  const fillMode = formula.mode
   const ctx = canvas.getContext('2d')!
   ctx.fillStyle = renderMode.color
   const { BOTH } = RangeResults

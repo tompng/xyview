@@ -1,21 +1,12 @@
 import { parseFormula, render } from './panel'
+import { View } from './view'
 
 onload = () => {
-  const { func, mode } = parseFormula('(x*x+y*y-1+sin(5theta)/3)*(y-tan(4x-siny))*floor(x)>=0√(y+1-xx)')
-  const canvas = document.createElement('canvas')
-  const size = 512
-  const offset = 2
-  canvas.width = canvas.height = size + 2 * offset
-
-  const t = performance.now()
-  const range = { xMin: -2, yMin: -2, xMax: 2, yMax: 2 }
-  render(canvas, size, offset, range, func, mode, { color: 'blue', lineWidth: 2, fillAlpha: 0.5 })
-  console.log(performance.now() - t)
-
-  const t2 = performance.now()
-  for(let i=0;i<size*size; i++) func.value(i,i)
-  console.log(performance.now() - t2)
-
-  document.body.appendChild(canvas)
+  const exp = '(x*x+y*y-1+sin(5theta)/3)*(y-tan(4x-siny))*floor(x)>=0√(y+1-xx)'
+  const view = new View({
+    size: { width: 512, height: 512 },
+    formulas: [{ exp: exp, color: 'red', fillAlpha: 0.5 }]
+  })
+  document.body.appendChild(view.canvas)
+  ;(window as any).view = view
 }
-
