@@ -27,9 +27,9 @@ type Formula = {
 }
 
 type UpdateInfo = {
-  size?: Size
-  viewport?: Viewport
-  rendering?: RenderOption
+  size?: Partial<Size>
+  viewport?: Partial<Viewport>
+  rendering?: Partial<RenderOption>
   formulas?: FormulaInput[]
   inChange?: boolean
   calcPaused?: boolean
@@ -75,8 +75,8 @@ export class View {
   panelSize = 64
   panels = new Map<string, Panel>()
   constructor(info: UpdateInfo = {}) {
-    this.rendering = info.rendering ?? { lineWidth: 2, axisWidth: 2, axisInterval: 120, labelSize: 14 }
-    this.viewport = info.viewport ?? { center: { x: 0, y: 0 }, sizePerPixel: { width: 1 / 256, height: 1 / 256 } }
+    this.rendering = { lineWidth: 2, axisWidth: 2, axisInterval: 120, labelSize: 14, ...info.rendering }
+    this.viewport = { center: { x: 0, y: 0 }, sizePerPixel: { width: 1 / 256, height: 1 / 256 }, ...info.viewport }
     this.width = Math.round(info.size?.width ?? 256)
     this.height = Math.round(info.size?.height ?? 256)
     this.canvas = document.createElement('canvas')
@@ -127,9 +127,9 @@ export class View {
       this.needsRender ||= !calcPaused
     }
     if (formulas) this.updateFormulas(formulas)
-    if (rendering) this.updateRendering(rendering)
-    if (size) this.updateSize(size)
-    if (viewport) this.updateViewport(viewport)
+    if (rendering) this.updateRendering({ ...this.rendering, ...rendering })
+    if (size) this.updateSize({ width: this.width, height: this.height, ...size })
+    if (viewport) this.updateViewport({ ...this.viewport, ...viewport })
     this.render()
   }
   calculate() {
