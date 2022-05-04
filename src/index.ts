@@ -1,4 +1,3 @@
-import { parseFormula, render } from './panel'
 import { View } from './view'
 
 onload = () => {

@@ -1,4 +1,4 @@
-import { parseFormula, ParsedFormula, render } from './panel'
+import { parseFormula, ParsedFormula, render } from './renderer'
 
 type Size = { width: number; height: number }
 type RenderOption = {
