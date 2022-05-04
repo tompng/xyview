@@ -32,6 +32,7 @@ type UpdateInfo = {
   rendering?: RenderOption
   formulas?: FormulaInput[]
   inChange?: boolean
+  calcPaused?: boolean
 }
 
 function isEqual(a: unknown, b: unknown): boolean {
@@ -48,6 +49,8 @@ function isEqual(a: unknown, b: unknown): boolean {
 
 type Panel = {
   canvases: HTMLCanvasElement[]
+  dx: number
+  dy: number
   ix: number
   iy: number
 }
@@ -118,7 +121,11 @@ export class View {
     this.viewport = viewport
     this.needsRender = true
   }
-  update({ size, viewport, rendering, formulas }: UpdateInfo) {
+  update({ size, viewport, rendering, formulas, calcPaused }: UpdateInfo) {
+    if (calcPaused !== undefined && this.calcPaused !== calcPaused) {
+      this.calcPaused = calcPaused
+      this.needsRender ||= !calcPaused
+    }
     if (formulas) this.updateFormulas(formulas)
     if (rendering) this.updateRendering(rendering)
     if (size) this.updateSize(size)
@@ -139,8 +146,10 @@ export class View {
     const iyMin = Math.ceil((-height / 2 - iyBase) / panelSize) - 1
     const iyMax = Math.floor((height / 2 - iyBase) / panelSize)
     const unusedPanels: Panel[] = []
+    const dx = sizePerPixel.width * panelSize
+    const dy = sizePerPixel.height * panelSize
     for (const [key, panel] of panels.entries()) {
-      if (panel.ix < ixMin - 1 || panel.ix > ixMax + 1 || panel.iy < iyMin - 1 || panel.iy > iyMax + 1) {
+      if (panel.ix < ixMin - 1 || panel.ix > ixMax + 1 || panel.iy < iyMin - 1 || panel.iy > iyMax + 1 || panel.dx !== dx || panel.dy !== dy) {
         panels.delete(key)
         unusedPanels.push(panel)
       }
@@ -152,10 +161,10 @@ export class View {
         const canvases = unusedPanels.pop()?.canvases ?? [...new Array(this.formulas.length)].map(() => document.createElement('canvas'))
         const canvasSize = panelSize + 2 * offset
         const range = {
-          xMin: ix * sizePerPixel.width * panelSize,
-          xMax: (ix + 1) * sizePerPixel.width * panelSize,
-          yMin: iy * sizePerPixel.height * panelSize,
-          yMax: (iy + 1) * sizePerPixel.height * panelSize
+          xMin: ix * dx,
+          xMax: (ix + 1) * dx,
+          yMin: iy * dy,
+          yMax: (iy + 1) * dy
         }
         for (let i = 0; i < this.formulas.length; i++) {
           const formula = this.formulas[i]
@@ -168,7 +177,7 @@ export class View {
             canvas.width = canvas.height = 0
           }
         }
-        panels.set(key, { ix, iy, canvases })
+        panels.set(key, { ix, iy, dx, dy, canvases })
         if (performance.now() > startTime + calculationTime) {
           console.log('interrupt')
           this.needsRender = true
@@ -199,9 +208,17 @@ export class View {
         const image = panel.canvases[i]
         const offsetX = (image.width - panelSize) / 2
         const offsetY = (image.height - panelSize) / 2
-        const x = Math.round(width / 2 - center.x / sizePerPixel.width - offsetX) + panel.ix * panelSize
-        const y = Math.round(height / 2 - center.y / sizePerPixel.height - offsetY) + panel.iy * panelSize
-        ctx.drawImage(image, x, y - height, image.width, image.height)
+        const left = Math.round(width / 2 + (panel.dx * panel.ix - center.x) / sizePerPixel.width)
+        const right = Math.round(width / 2 + (panel.dx * (panel.ix + 1) - center.x) / sizePerPixel.width)
+        const bottom = Math.round(height / 2 + (panel.dy * panel.iy - center.y) / sizePerPixel.height)
+        const top = Math.round(height / 2 + (panel.dy * (panel.iy + 1) - center.y) / sizePerPixel.height)
+        ctx.drawImage(
+          image,
+          left - offsetX * (right - left) / panelSize,
+          bottom - height - offsetY * (top - bottom) / panelSize,
+          (right - left) * image.width / panelSize,
+          (top - bottom) * image.height / panelSize
+        )
       }
     }
     ctx.restore()
