@@ -1,0 +1,15 @@
+{
+  "scripts": {
+    "start": "webpack -w"
+  },
+  "dependencies": {
+    "numcore": "https://github.com/tompng/numcore.git",
+    "xyview": "../"
+  },
+  "devDependencies": {
+    "ts-loader": "*",
+    "typescript": "*",
+    "webpack": "*",
+    "webpack-cli": "*"
+  }
+}

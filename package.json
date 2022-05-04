@@ -1,0 +1,14 @@
+{
+  "name": "xyview",
+  "version": "0.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "numcore": "https://github.com/tompng/numcore.git"
+  },
+  "devDependencies": {
+    "typescript": "*"
+  }
+}

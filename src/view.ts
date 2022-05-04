@@ -1,32 +1,35 @@
 import { parseFormula, ParsedFormula, render } from './renderer'
 
-type Size = { width: number; height: number }
-type RenderOption = {
+export type Size = { width: number; height: number }
+
+export type RenderOption = {
   lineWidth: number
   axisInterval: number | null
   axisWidth: number
   labelSize: number | null
 }
+
 type Point = { x: number; y: number }
-type Viewport = {
+
+export type Viewport = {
   center: Point
   sizePerPixel: Size
 }
 
-interface FormulaInput {
+export type FormulaInput = {
   exp: string
   color: string
   fillAlpha: number
 }
 
-type Formula = {
+export type Formula = {
   exp: string
   color: string
   fillAlpha: number
   parsed: ParsedFormula | { error: string }
 }
 
-type UpdateInfo = {
+export type UpdateAttributes = {
   size?: Partial<Size>
   viewport?: Partial<Viewport>
   rendering?: Partial<RenderOption>
@@ -75,7 +78,7 @@ export class View {
   panelSize = 64
   calculationTime = 100
   panels = new Map<string, Panel>()
-  constructor(info: UpdateInfo = {}) {
+  constructor(info: UpdateAttributes = {}) {
     this.rendering = { lineWidth: 2, axisWidth: 2, axisInterval: 120, labelSize: 14, ...info.rendering }
     this.viewport = { center: { x: 0, y: 0 }, sizePerPixel: { width: 1 / 256, height: 1 / 256 }, ...info.viewport }
     this.width = Math.round(info.size?.width ?? 256)
@@ -122,7 +125,7 @@ export class View {
     this.viewport = viewport
     this.needsRender = true
   }
-  update({ size, viewport, rendering, formulas, calcPaused }: UpdateInfo) {
+  update({ size, viewport, rendering, formulas, calcPaused }: UpdateAttributes) {
     if (calcPaused !== undefined && this.calcPaused !== calcPaused) {
       this.calcPaused = calcPaused
       this.needsRender ||= !calcPaused
