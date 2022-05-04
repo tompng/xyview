@@ -73,6 +73,7 @@ export class View {
   needsRender = true
   calcPaused = false
   panelSize = 64
+  calculationTime = 100
   panels = new Map<string, Panel>()
   constructor(info: UpdateInfo = {}) {
     this.rendering = { lineWidth: 2, axisWidth: 2, axisInterval: 120, labelSize: 14, ...info.rendering }
@@ -133,10 +134,9 @@ export class View {
     this.render()
   }
   calculate() {
-    const { width, height, panels, panelSize } = this
+    const { width, height, panels, panelSize, calculationTime } = this
     const { center, sizePerPixel } = this.viewport
     const startTime = performance.now()
-    const calculationTime = 200
     const { lineWidth } = this.rendering
     const offset = Math.ceil(lineWidth / 2) + 2
     const ixBase = -center.x / sizePerPixel.width
@@ -179,13 +179,11 @@ export class View {
         }
         panels.set(key, { ix, iy, dx, dy, canvases })
         if (performance.now() > startTime + calculationTime) {
-          console.log('interrupt')
           this.needsRender = true
           break
         }
       }
     }
-    console.log('calc: ' + (performance.now()-startTime))
     for (const panel of unusedPanels) panel.canvases.forEach(releaseCanvas)
   }
   render() {
@@ -206,6 +204,7 @@ export class View {
     for (let i = 0; i < this.formulas.length; i++) {
       for (const [_key, panel] of panels) {
         const image = panel.canvases[i]
+        if (image.width === 0) continue
         const offsetX = (image.width - panelSize) / 2
         const offsetY = (image.height - panelSize) / 2
         const left = Math.round(width / 2 + (panel.dx * panel.ix - center.x) / sizePerPixel.width)
