@@ -9,11 +9,11 @@ export type RenderOption = {
   labelSize: number | null
 }
 
-type Point = { x: number; y: number }
+type Vector2D = { x: number; y: number }
 
 export type Viewport = {
-  center: Point
-  sizePerPixel: Size
+  center: Vector2D
+  sizePerPixel: Vector2D
 }
 
 export type FormulaInput = {
@@ -80,7 +80,7 @@ export class View {
   panels = new Map<string, Panel>()
   constructor(info: UpdateAttributes = {}) {
     this.rendering = { lineWidth: 2, axisWidth: 2, axisInterval: 120, labelSize: 14, ...info.rendering }
-    this.viewport = { center: { x: 0, y: 0 }, sizePerPixel: { width: 1 / 256, height: 1 / 256 }, ...info.viewport }
+    this.viewport = { center: { x: 0, y: 0 }, sizePerPixel: { x: 1 / 256, y: 1 / 256 }, ...info.viewport }
     this.width = Math.round(info.size?.width ?? 256)
     this.height = Math.round(info.size?.height ?? 256)
     this.canvas = document.createElement('canvas')
@@ -142,15 +142,15 @@ export class View {
     const startTime = performance.now()
     const { lineWidth } = this.rendering
     const offset = Math.ceil(lineWidth / 2) + 2
-    const ixBase = -center.x / sizePerPixel.width
-    const iyBase = -center.y / sizePerPixel.height
+    const ixBase = -center.x / sizePerPixel.x
+    const iyBase = -center.y / sizePerPixel.y
     const ixMin = Math.ceil((-width / 2 - ixBase) / panelSize) - 1
     const ixMax = Math.floor((width / 2 - ixBase) / panelSize)
     const iyMin = Math.ceil((-height / 2 - iyBase) / panelSize) - 1
     const iyMax = Math.floor((height / 2 - iyBase) / panelSize)
     const unusedPanels: Panel[] = []
-    const dx = sizePerPixel.width * panelSize
-    const dy = sizePerPixel.height * panelSize
+    const dx = sizePerPixel.x * panelSize
+    const dy = sizePerPixel.y * panelSize
     for (const [key, panel] of panels.entries()) {
       if (panel.ix < ixMin - 1 || panel.ix > ixMax + 1 || panel.iy < iyMin - 1 || panel.iy > iyMax + 1 || panel.dx !== dx || panel.dy !== dy) {
         panels.delete(key)
@@ -210,10 +210,10 @@ export class View {
         if (image.width === 0) continue
         const offsetX = (image.width - panelSize) / 2
         const offsetY = (image.height - panelSize) / 2
-        const left = Math.round(width / 2 + (panel.dx * panel.ix - center.x) / sizePerPixel.width)
-        const right = Math.round(width / 2 + (panel.dx * (panel.ix + 1) - center.x) / sizePerPixel.width)
-        const bottom = Math.round(height / 2 + (panel.dy * panel.iy - center.y) / sizePerPixel.height)
-        const top = Math.round(height / 2 + (panel.dy * (panel.iy + 1) - center.y) / sizePerPixel.height)
+        const left = Math.round(width / 2 + (panel.dx * panel.ix - center.x) / sizePerPixel.x)
+        const right = Math.round(width / 2 + (panel.dx * (panel.ix + 1) - center.x) / sizePerPixel.x)
+        const bottom = Math.round(height / 2 + (panel.dy * panel.iy - center.y) / sizePerPixel.y)
+        const top = Math.round(height / 2 + (panel.dy * (panel.iy + 1) - center.y) / sizePerPixel.y)
         ctx.drawImage(
           image,
           left - offsetX * (right - left) / panelSize,
@@ -233,8 +233,8 @@ export class View {
     ctx.save()
     const { width, height, panels, panelSize } = this
     const { center, sizePerPixel } = this.viewport
-    const xSize = width * sizePerPixel.width
-    const ySize = height * sizePerPixel.height
+    const xSize = width * sizePerPixel.x
+    const ySize = height * sizePerPixel.y
     const axisIntervals = (size: number, pixel: number): [number, number] => {
       const base = 10 ** Math.floor(Math.log10(size * minIntervalPixel / pixel))
       const basePixel = base / size * pixel
@@ -248,16 +248,16 @@ export class View {
     }
     if (fontSize) ctx.font = `bold ${fontSize}px sans-serif`
     const labels: { text: string; x: number; y: number; align: 'left' | 'center' | 'right'; baseline: 'middle' | 'top' | 'bottom' }[] = []
-    const xConvert = (x: number) => width / 2 + (x - center.x) / sizePerPixel.width
-    const yConvert = (y: number) => height / 2 - (y - center.y) / sizePerPixel.height
+    const xConvert = (x: number) => width / 2 + (x - center.x) / sizePerPixel.x
+    const yConvert = (y: number) => height / 2 - (y - center.y) / sizePerPixel.y
     const canvasX0 = xConvert(0)
     const canvasY0 = yConvert(0)
     const labelText = (n: number) => n.toFixed(10).replace(/\.?0+$/, '')
     ctx.lineWidth = this.rendering.axisWidth
     ctx.strokeStyle = 'black'
     const renderXAxis = (mainInterval: number, division: number, renderZeroLabel: boolean) => {
-      const ixMin = Math.ceil((-width * sizePerPixel.width / 2 + center.x) / mainInterval * division)
-      const ixMax = Math.floor((width * sizePerPixel.width / 2 + center.x) / mainInterval * division)
+      const ixMin = Math.ceil((-width * sizePerPixel.x / 2 + center.x) / mainInterval * division)
+      const ixMax = Math.floor((width * sizePerPixel.x / 2 + center.x) / mainInterval * division)
       for (let ix = ixMin; ix <= ixMax; ix++) {
         const x = ix * mainInterval / division
         const canvasX = xConvert(ix * mainInterval / division)
@@ -278,8 +278,8 @@ export class View {
       }
     }
     const renderYAxis = (mainInterval: number, division: number, renderZeroLabel: boolean) => {
-      const iyMin = Math.ceil((-height * sizePerPixel.height / 2 + center.y) / mainInterval * division)
-      const iyMax = Math.floor((height * sizePerPixel.height / 2 + center.y) / mainInterval * division)
+      const iyMin = Math.ceil((-height * sizePerPixel.y / 2 + center.y) / mainInterval * division)
+      const iyMax = Math.floor((height * sizePerPixel.y / 2 + center.y) / mainInterval * division)
       let labelMaxWidth = 0
       for (let iy = iyMin; iy <= iyMax; iy++) {
         labelMaxWidth = Math.max(labelMaxWidth, ctx.measureText(labelText(iy * mainInterval / division)).width)
@@ -314,9 +314,9 @@ export class View {
         y: clamp(canvasY0 + fontSize / 4, 0, height - fontSize)
       })
     }
-    const scaleRatio = sizePerPixel.width / sizePerPixel.height
+    const scaleRatio = sizePerPixel.x / sizePerPixel.y
     if (4 / 5 < scaleRatio && scaleRatio < 5 / 4) {
-      const [main, div] = sizePerPixel.width < sizePerPixel.height ? axisIntervals(xSize, width) : axisIntervals(ySize, height)
+      const [main, div] = scaleRatio < 1 ? axisIntervals(xSize, width) : axisIntervals(ySize, height)
       renderXAxis(main, div, !zeroVisible)
       renderYAxis(main, div, !zeroVisible)
     } else {

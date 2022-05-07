@@ -9,13 +9,13 @@ export declare type RenderOption = {
     axisWidth: number;
     labelSize: number | null;
 };
-declare type Point = {
+declare type Vector2D = {
     x: number;
     y: number;
 };
 export declare type Viewport = {
-    center: Point;
-    sizePerPixel: Size;
+    center: Vector2D;
+    sizePerPixel: Vector2D;
 };
 export declare type FormulaInput = {
     exp: string;

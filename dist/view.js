@@ -81,7 +81,7 @@ var View = /** @class */ (function () {
         this.calculationTime = 100;
         this.panels = new Map();
         this.rendering = __assign({ lineWidth: 2, axisWidth: 2, axisInterval: 120, labelSize: 14 }, info.rendering);
-        this.viewport = __assign({ center: { x: 0, y: 0 }, sizePerPixel: { width: 1 / 256, height: 1 / 256 } }, info.viewport);
+        this.viewport = __assign({ center: { x: 0, y: 0 }, sizePerPixel: { x: 1 / 256, y: 1 / 256 } }, info.viewport);
         this.width = Math.round((_b = (_a = info.size) === null || _a === void 0 ? void 0 : _a.width) !== null && _b !== void 0 ? _b : 256);
         this.height = Math.round((_d = (_c = info.size) === null || _c === void 0 ? void 0 : _c.height) !== null && _d !== void 0 ? _d : 256);
         this.canvas = document.createElement('canvas');
@@ -184,15 +184,15 @@ var View = /** @class */ (function () {
         var startTime = performance.now();
         var lineWidth = this.rendering.lineWidth;
         var offset = Math.ceil(lineWidth / 2) + 2;
-        var ixBase = -center.x / sizePerPixel.width;
-        var iyBase = -center.y / sizePerPixel.height;
+        var ixBase = -center.x / sizePerPixel.x;
+        var iyBase = -center.y / sizePerPixel.y;
         var ixMin = Math.ceil((-width / 2 - ixBase) / panelSize) - 1;
         var ixMax = Math.floor((width / 2 - ixBase) / panelSize);
         var iyMin = Math.ceil((-height / 2 - iyBase) / panelSize) - 1;
         var iyMax = Math.floor((height / 2 - iyBase) / panelSize);
         var unusedPanels = [];
-        var dx = sizePerPixel.width * panelSize;
-        var dy = sizePerPixel.height * panelSize;
+        var dx = sizePerPixel.x * panelSize;
+        var dy = sizePerPixel.y * panelSize;
         try {
             for (var _h = __values(panels.entries()), _j = _h.next(); !_j.done; _j = _h.next()) {
                 var _k = __read(_j.value, 2), key = _k[0], panel = _k[1];
@@ -283,10 +283,10 @@ var View = /** @class */ (function () {
                         continue;
                     var offsetX = (image.width - panelSize) / 2;
                     var offsetY = (image.height - panelSize) / 2;
-                    var left = Math.round(width / 2 + (panel.dx * panel.ix - center.x) / sizePerPixel.width);
-                    var right = Math.round(width / 2 + (panel.dx * (panel.ix + 1) - center.x) / sizePerPixel.width);
-                    var bottom = Math.round(height / 2 + (panel.dy * panel.iy - center.y) / sizePerPixel.height);
-                    var top_1 = Math.round(height / 2 + (panel.dy * (panel.iy + 1) - center.y) / sizePerPixel.height);
+                    var left = Math.round(width / 2 + (panel.dx * panel.ix - center.x) / sizePerPixel.x);
+                    var right = Math.round(width / 2 + (panel.dx * (panel.ix + 1) - center.x) / sizePerPixel.x);
+                    var bottom = Math.round(height / 2 + (panel.dy * panel.iy - center.y) / sizePerPixel.y);
+                    var top_1 = Math.round(height / 2 + (panel.dy * (panel.iy + 1) - center.y) / sizePerPixel.y);
                     ctx.drawImage(image, left - offsetX * (right - left) / panelSize, bottom - height - offsetY * (top_1 - bottom) / panelSize, (right - left) * image.width / panelSize, (top_1 - bottom) * image.height / panelSize);
                 }
             }
@@ -310,8 +310,8 @@ var View = /** @class */ (function () {
         ctx.save();
         var _c = this, width = _c.width, height = _c.height, panels = _c.panels, panelSize = _c.panelSize;
         var _d = this.viewport, center = _d.center, sizePerPixel = _d.sizePerPixel;
-        var xSize = width * sizePerPixel.width;
-        var ySize = height * sizePerPixel.height;
+        var xSize = width * sizePerPixel.x;
+        var ySize = height * sizePerPixel.y;
         var axisIntervals = function (size, pixel) {
             var base = Math.pow(10, Math.floor(Math.log10(size * minIntervalPixel / pixel)));
             var basePixel = base / size * pixel;
@@ -328,16 +328,16 @@ var View = /** @class */ (function () {
         if (fontSize)
             ctx.font = "bold ".concat(fontSize, "px sans-serif");
         var labels = [];
-        var xConvert = function (x) { return width / 2 + (x - center.x) / sizePerPixel.width; };
-        var yConvert = function (y) { return height / 2 - (y - center.y) / sizePerPixel.height; };
+        var xConvert = function (x) { return width / 2 + (x - center.x) / sizePerPixel.x; };
+        var yConvert = function (y) { return height / 2 - (y - center.y) / sizePerPixel.y; };
         var canvasX0 = xConvert(0);
         var canvasY0 = yConvert(0);
         var labelText = function (n) { return n.toFixed(10).replace(/\.?0+$/, ''); };
         ctx.lineWidth = this.rendering.axisWidth;
         ctx.strokeStyle = 'black';
         var renderXAxis = function (mainInterval, division, renderZeroLabel) {
-            var ixMin = Math.ceil((-width * sizePerPixel.width / 2 + center.x) / mainInterval * division);
-            var ixMax = Math.floor((width * sizePerPixel.width / 2 + center.x) / mainInterval * division);
+            var ixMin = Math.ceil((-width * sizePerPixel.x / 2 + center.x) / mainInterval * division);
+            var ixMax = Math.floor((width * sizePerPixel.x / 2 + center.x) / mainInterval * division);
             for (var ix = ixMin; ix <= ixMax; ix++) {
                 var x = ix * mainInterval / division;
                 var canvasX = xConvert(ix * mainInterval / division);
@@ -358,8 +358,8 @@ var View = /** @class */ (function () {
             }
         };
         var renderYAxis = function (mainInterval, division, renderZeroLabel) {
-            var iyMin = Math.ceil((-height * sizePerPixel.height / 2 + center.y) / mainInterval * division);
-            var iyMax = Math.floor((height * sizePerPixel.height / 2 + center.y) / mainInterval * division);
+            var iyMin = Math.ceil((-height * sizePerPixel.y / 2 + center.y) / mainInterval * division);
+            var iyMax = Math.floor((height * sizePerPixel.y / 2 + center.y) / mainInterval * division);
             var labelMaxWidth = 0;
             for (var iy = iyMin; iy <= iyMax; iy++) {
                 labelMaxWidth = Math.max(labelMaxWidth, ctx.measureText(labelText(iy * mainInterval / division)).width);
@@ -395,9 +395,9 @@ var View = /** @class */ (function () {
                 y: clamp(canvasY0 + fontSize / 4, 0, height - fontSize)
             });
         }
-        var scaleRatio = sizePerPixel.width / sizePerPixel.height;
+        var scaleRatio = sizePerPixel.x / sizePerPixel.y;
         if (4 / 5 < scaleRatio && scaleRatio < 5 / 4) {
-            var _e = __read(sizePerPixel.width < sizePerPixel.height ? axisIntervals(xSize, width) : axisIntervals(ySize, height), 2), main = _e[0], div = _e[1];
+            var _e = __read(scaleRatio < 1 ? axisIntervals(xSize, width) : axisIntervals(ySize, height), 2), main = _e[0], div = _e[1];
             renderXAxis(main, div, !zeroVisible);
             renderYAxis(main, div, !zeroVisible);
         }
