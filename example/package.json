@@ -3,7 +3,6 @@
     "start": "webpack -w"
   },
   "dependencies": {
-    "numcore": "https://github.com/tompng/numcore.git",
     "xyview": "../"
   },
   "devDependencies": {
