@@ -17,19 +17,26 @@ export declare type Viewport = {
     center: Vector2D;
     sizePerPixel: Vector2D;
 };
-export declare type FormulaInput = {
-    exp: string;
+declare type FormulaAppearance = {
     color: string;
     fillAlpha: number;
 };
-export declare type Formula = {
-    exp: string;
-    color: string;
-    fillAlpha: number;
-    parsed: ParsedFormula | {
-        error: string;
-    };
+declare type FormulaExpression = {
+    tex: string;
+    plain?: undefined;
+} | {
+    tex?: undefined;
+    plain: string;
 };
+declare type FormulaResult = {
+    parsed: ParsedFormula;
+    error?: undefined;
+} | {
+    parsed?: undefined;
+    error: string;
+};
+export declare type FormulaInput = FormulaExpression & FormulaAppearance;
+export declare type Formula = FormulaInput & FormulaResult;
 export declare type UpdateAttributes = {
     size?: Partial<Size>;
     viewport?: Partial<Viewport>;

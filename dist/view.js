@@ -49,6 +49,7 @@ var __values = (this && this.__values) || function(o) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.View = void 0;
 var renderer_1 = require("./renderer");
+var numcore_1 = require("numcore");
 function isEqual(a, b) {
     if (a === b)
         return true;
@@ -90,10 +91,14 @@ var View = /** @class */ (function () {
     View.prototype.updateFormulas = function (input) {
         var e_1, _a;
         var cache = new Map();
+        var key = function (_a) {
+            var tex = _a.tex, plain = _a.plain;
+            return "".concat(tex != null ? 'tex' : 'plain', "_").concat(tex !== null && tex !== void 0 ? tex : plain);
+        };
         try {
             for (var _b = __values(this.formulas), _c = _b.next(); !_c.done; _c = _b.next()) {
                 var formula = _c.value;
-                cache.set(formula.exp, formula.parsed);
+                cache.set(key(formula), formula);
             }
         }
         catch (e_1_1) { e_1 = { error: e_1_1 }; }
@@ -106,11 +111,14 @@ var View = /** @class */ (function () {
         var formulas = input.map(function (input) {
             var _a;
             try {
-                var parsed = (_a = cache.get(input.exp)) !== null && _a !== void 0 ? _a : (0, renderer_1.parseFormula)(input.exp);
+                var cached = cache.get(key(input));
+                if (cached === null || cached === void 0 ? void 0 : cached.error)
+                    throw cached === null || cached === void 0 ? void 0 : cached.error;
+                var parsed = (_a = cached === null || cached === void 0 ? void 0 : cached.parsed) !== null && _a !== void 0 ? _a : (0, renderer_1.parseFormula)(input.tex != null ? (0, numcore_1.convertLatex)(input.tex) : input.plain);
                 return __assign(__assign({}, input), { parsed: parsed });
             }
             catch (e) {
-                return __assign(__assign({}, input), { parsed: { error: String(e) } });
+                return __assign(__assign({}, input), { error: String(e) });
             }
         });
         if (isEqual(this.formulas, formulas))
@@ -225,7 +233,7 @@ var View = /** @class */ (function () {
                 for (var i = 0; i < this.formulas.length; i++) {
                     var formula = this.formulas[i];
                     var canvas = canvases[i];
-                    if ('mode' in formula.parsed) {
+                    if (formula.parsed) {
                         canvas.width = canvas.height = canvasSize;
                         (_e = canvas.getContext('2d')) === null || _e === void 0 ? void 0 : _e.clearRect(0, 0, canvasSize, canvasSize);
                         (0, renderer_1.render)(canvas, panelSize, offset, range, formula.parsed, __assign({ lineWidth: lineWidth }, formula));

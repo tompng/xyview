@@ -1,5 +1,5 @@
 import { parseFormula, ParsedFormula, render } from './renderer'
-
+import { convertLatex } from 'numcore'
 export type Size = { width: number; height: number }
 
 export type RenderOption = {
@@ -16,18 +16,22 @@ export type Viewport = {
   sizePerPixel: Vector2D
 }
 
-export type FormulaInput = {
-  exp: string
+type FormulaAppearance = {
   color: string
   fillAlpha: number
 }
 
-export type Formula = {
-  exp: string
-  color: string
-  fillAlpha: number
-  parsed: ParsedFormula | { error: string }
-}
+type FormulaExpression =
+  | { tex: string; plain?: undefined }
+  | { tex?: undefined; plain: string }
+
+type FormulaResult =
+  | { parsed: ParsedFormula; error?: undefined }
+  | { parsed?: undefined; error: string }
+
+export type FormulaInput = FormulaExpression & FormulaAppearance
+
+export type Formula = FormulaInput & FormulaResult
 
 export type UpdateAttributes = {
   size?: Partial<Size>
@@ -87,14 +91,19 @@ export class View {
     this.update(info)
   }
   updateFormulas(input: FormulaInput[]) {
-    const cache = new Map<string, ParsedFormula | { error: string }>()
-    for (const formula of this.formulas) cache.set(formula.exp, formula.parsed)
+    const cache = new Map<string, FormulaResult>()
+    const key = ({ tex, plain }: FormulaInput) => `${tex != null ? 'tex' : 'plain'}_${tex ?? plain}`
+    for (const formula of this.formulas) {
+      cache.set(key(formula), formula)
+    }
     const formulas: Formula[] = input.map(input => {
       try {
-        const parsed = cache.get(input.exp) ?? parseFormula(input.exp)
+        const cached = cache.get(key(input))
+        if (cached?.error) throw cached?.error
+        const parsed = cached?.parsed ?? parseFormula(input.tex != null ? convertLatex(input.tex) : input.plain)
         return { ...input, parsed }
       } catch(e) {
-        return { ...input, parsed: { error: String(e) } }
+        return { ...input, error: String(e) }
       }
     })
     if (isEqual(this.formulas, formulas)) return
@@ -172,7 +181,7 @@ export class View {
         for (let i = 0; i < this.formulas.length; i++) {
           const formula = this.formulas[i]
           const canvas = canvases[i]
-          if ('mode' in formula.parsed) {
+          if (formula.parsed) {
             canvas.width = canvas.height = canvasSize
             canvas.getContext('2d')?.clearRect(0, 0, canvasSize, canvasSize)
             render(canvas, panelSize, offset, range, formula.parsed, { lineWidth, ...formula })

@@ -4,8 +4,8 @@ onload = () => {
   const view = new View({
     size: { width: 512, height: 512 },
     formulas: [
-      { exp: '(x*x+y*y-1+sin(5theta)/3)*(y-tan(4x-siny))*floor(x)>=0√(y+1-xx)', color: 'red', fillAlpha: 0.5 },
-      { exp: 'sin8r<0', color: 'blue', fillAlpha: 0.5 }
+      { plain: '(x*x+y*y-1+sin(5theta)/3)*(y-tan(4x-siny))*floor(x)>=0√(y+1-xx)', color: 'red', fillAlpha: 0.5 },
+      { tex: 'x^4+y^4=1+\\frac{\\sin4\\theta}{2}', color: 'blue', fillAlpha: 0.5 }
     ]
   })
   document.body.appendChild(view.canvas)
