@@ -114,7 +114,7 @@ var View = /** @class */ (function () {
                 var cached = cache.get(key(input));
                 if (cached === null || cached === void 0 ? void 0 : cached.error)
                     throw cached === null || cached === void 0 ? void 0 : cached.error;
-                var parsed = (_a = cached === null || cached === void 0 ? void 0 : cached.parsed) !== null && _a !== void 0 ? _a : (0, renderer_1.parseFormula)(input.tex != null ? (0, numcore_1.convertLatex)(input.tex) : input.plain);
+                var parsed = (_a = cached === null || cached === void 0 ? void 0 : cached.parsed) !== null && _a !== void 0 ? _a : (0, renderer_1.parseFormula)(input.tex != null ? (0, numcore_1.texToPlain)(input.tex) : input.plain);
                 return __assign(__assign({}, input), { parsed: parsed });
             }
             catch (e) {

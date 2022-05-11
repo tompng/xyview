@@ -1,5 +1,5 @@
 import { parseFormula, ParsedFormula, render } from './renderer'
-import { convertLatex } from 'numcore'
+import { texToPlain } from 'numcore'
 export type Size = { width: number; height: number }
 
 export type RenderOption = {
@@ -100,7 +100,7 @@ export class View {
       try {
         const cached = cache.get(key(input))
         if (cached?.error) throw cached?.error
-        const parsed = cached?.parsed ?? parseFormula(input.tex != null ? convertLatex(input.tex) : input.plain)
+        const parsed = cached?.parsed ?? parseFormula(input.tex != null ? texToPlain(input.tex) : input.plain)
         return { ...input, parsed }
       } catch(e) {
         return { ...input, error: String(e) }
