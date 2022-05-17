@@ -17,8 +17,8 @@ export type Viewport = {
 }
 
 type FormulaAppearance = {
-  color: string
-  fillAlpha: number
+  color: string | null
+  fillAlpha?: number
 }
 
 type FormulaExpression =
@@ -183,12 +183,12 @@ export class View {
           yMax: (iy + 1) * dy
         }
         for (let i = 0; i < this.formulas.length; i++) {
-          const formula = this.formulas[i]
+          const { color, parsed, fillAlpha } = this.formulas[i]
           const canvas = canvases[i]
-          if (formula.parsed.type === 'eq') {
+          if (parsed.type === 'eq' && color != null && color !== 'transparent') {
             canvas.width = canvas.height = canvasSize
             canvas.getContext('2d')?.clearRect(0, 0, canvasSize, canvasSize)
-            render(canvas, panelSize, offset, range, formula.parsed, { lineWidth, ...formula })
+            render(canvas, panelSize, offset, range, parsed, { lineWidth, color, fillAlpha: fillAlpha ?? 0.5 })
           } else {
             canvas.width = canvas.height = 0
           }
