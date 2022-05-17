@@ -1,4 +1,4 @@
-import { parseFormula, ParsedFormula, render } from './renderer'
+import { parseFormulas, ParsedFormula, render } from './renderer'
 import { texToPlain } from 'numcore'
 export type Size = { width: number; height: number }
 
@@ -25,9 +25,7 @@ type FormulaExpression =
   | { tex: string; plain?: undefined }
   | { tex?: undefined; plain: string }
 
-type FormulaResult =
-  | { parsed: ParsedFormula; error?: undefined }
-  | { parsed?: undefined; error: string }
+type FormulaResult = { parsed: ParsedFormula }
 
 export type FormulaInput = FormulaExpression & FormulaAppearance
 
@@ -90,25 +88,31 @@ export class View {
     this.canvas = document.createElement('canvas')
     this.update(info)
   }
-  updateFormulas(input: FormulaInput[]) {
-    const cache = new Map<string, FormulaResult>()
-    const key = ({ tex, plain }: FormulaInput) => `${tex != null ? 'tex' : 'plain'}_${tex ?? plain}`
-    for (const formula of this.formulas) {
-      cache.set(key(formula), formula)
+  updateFormulas(inputs: FormulaInput[]) {
+    const extract = (formulas: FormulaInput[]) => formulas.map(({ tex, plain }) => ({ tex, plain }))
+    let formulas: Formula[]
+    if (isEqual(extract(this.formulas), extract(inputs))) {
+      formulas = inputs.map(({ color, fillAlpha }, i) => ({ ...this.formulas[i], color, fillAlpha }))
+    } else {
+      const textFormulas = inputs.map(({ tex, plain }) => {
+        try {
+          return { text: tex != null ? texToPlain(tex) : plain }
+        } catch (e) {
+          return { text: '', error: String(e) }
+        }
+      })
+      const parseds = parseFormulas(textFormulas.map(({ text }) => text))
+      formulas = inputs.map((input, index) => {
+        const error = textFormulas[index].error
+        if (error) return { ...input, parsed: { type: 'error', error }}
+        return ({ ...input, parsed: parseds[index] })
+      })
     }
-    const formulas: Formula[] = input.map(input => {
-      try {
-        const cached = cache.get(key(input))
-        if (cached?.error) throw cached?.error
-        const parsed = cached?.parsed ?? parseFormula(input.tex != null ? texToPlain(input.tex) : input.plain)
-        return { ...input, parsed }
-      } catch(e) {
-        return { ...input, error: String(e) }
-      }
-    })
-    if (isEqual(this.formulas, formulas)) return
-    this.formulas = formulas
-    this.invalidatePanels()
+    if (!isEqual(this.formulas, formulas)) {
+      this.formulas = formulas
+      this.invalidatePanels()
+    }
+    return this.formulas
   }
   updateRendering(rendering: RenderOption) {
     if (isEqual(rendering, this.rendering)) return
@@ -181,7 +185,7 @@ export class View {
         for (let i = 0; i < this.formulas.length; i++) {
           const formula = this.formulas[i]
           const canvas = canvases[i]
-          if (formula.parsed) {
+          if (formula.parsed.type === 'eq') {
             canvas.width = canvas.height = canvasSize
             canvas.getContext('2d')?.clearRect(0, 0, canvasSize, canvasSize)
             render(canvas, panelSize, offset, range, formula.parsed, { lineWidth, ...formula })
