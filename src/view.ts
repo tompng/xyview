@@ -1,4 +1,4 @@
-import { parseFormulas, ParsedFormula, render } from './renderer'
+import { parseFormulas, ParsedFormula, render, ParsedEquation } from './renderer'
 import { texToPlain } from 'numcore'
 export type Size = { width: number; height: number }
 
@@ -89,11 +89,15 @@ export class View {
     this.update(info)
   }
   updateFormulas(inputs: FormulaInput[]) {
-    const extract = (formulas: FormulaInput[]) => formulas.map(({ tex, plain }) => ({ tex, plain }))
+    const extractText = ({ tex, plain }: FormulaInput) => ({ tex, plain })
     let formulas: Formula[]
-    if (isEqual(extract(this.formulas), extract(inputs))) {
+    if (isEqual(this.formulas.map(extractText), inputs.map(extractText))) {
       formulas = inputs.map(({ color, fillAlpha }, i) => ({ ...this.formulas[i], color, fillAlpha }))
     } else {
+      const cache = new Map<string, ParsedEquation>()
+      for (const formula of this.formulas) {
+        if (formula.parsed.type === 'eq') cache.set(formula.parsed.valueFuncCode, formula.parsed)
+      }
       const textFormulas = inputs.map(({ tex, plain }) => {
         try {
           return { text: tex != null ? texToPlain(tex) : plain }
@@ -104,14 +108,17 @@ export class View {
       const parseds = parseFormulas(textFormulas.map(({ text }) => text))
       formulas = inputs.map((input, index) => {
         const error = textFormulas[index].error
-        if (error) return { ...input, parsed: { type: 'error', error }}
-        return ({ ...input, parsed: parseds[index] })
+        if (error) return { ...input, parsed: { type: 'error', error } }
+        const parsed = parseds[index]
+        const fromCache = (parsed.type === 'eq' && cache.get(parsed.valueFuncCode)) || parsed
+        return ({ ...input, parsed: fromCache })
       })
     }
-    if (!isEqual(this.formulas, formulas)) {
-      this.formulas = formulas
+    const extractRendering = ({ parsed, color, fillAlpha }: Formula) => parsed.type === 'eq' ? { parsed, color, fillAlpha } : null
+    if (!isEqual(this.formulas.map(extractRendering), formulas.map(extractRendering))) {
       this.invalidatePanels()
     }
+    this.formulas = formulas
     return this.formulas
   }
   updateRendering(rendering: RenderOption) {

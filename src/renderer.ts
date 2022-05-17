@@ -36,8 +36,9 @@ function convertAST(ast: UniqASTNode, mode: CompareMode): [UniqASTNode, CompareM
   return [ast, mode]
 }
 
-type ParsedEquation = {
+export type ParsedEquation = {
   type: 'eq'
+  valueFuncCode: string
   valueFunc: ValueFunction2D
   rangeFunc: RangeFunction2D
   mode: {
@@ -46,8 +47,8 @@ type ParsedEquation = {
     zero: boolean
   }
 }
-type ParsedDefinition = { type: 'func' | 'var'; name: string }
-type ParsedError = { type: 'error', error: string }
+export type ParsedDefinition = { type: 'func' | 'var'; name: string }
+export type ParsedError = { type: 'error', error: string }
 
 export type ParsedFormula = ParsedEquation | ParsedDefinition | ParsedError
 
@@ -73,9 +74,10 @@ export function parseFormulas(expressions: string[]): ParsedFormula[] {
     const positive = mode.includes('>')
     const negative = mode.includes('<')
     const zero = mode.includes('=')
-    const valueFunc: ValueFunction2D = eval(astToValueFunctionCode(ast, ['x', 'y']))
+    const valueFuncCode = astToValueFunctionCode(ast, ['x', 'y'])
+    const valueFunc: ValueFunction2D = eval(valueFuncCode)
     const rangeFunc: RangeFunction2D = eval(astToRangeFunctionCode(ast, ['x', 'y'], { pos: positive, neg: negative, eq: zero, zero }))
-    return { type: 'eq', valueFunc, rangeFunc, mode: { positive, negative, zero } }
+    return { type: 'eq', valueFuncCode, valueFunc, rangeFunc, mode: { positive, negative, zero } }
   })
 }
 
