@@ -88,43 +88,67 @@ var View = /** @class */ (function () {
         this.canvas = document.createElement('canvas');
         this.update(info);
     }
-    View.prototype.updateFormulas = function (input) {
+    View.prototype.updateFormulas = function (inputs) {
         var e_1, _a;
-        var cache = new Map();
-        var key = function (_a) {
+        var _this = this;
+        var extractText = function (_a) {
             var tex = _a.tex, plain = _a.plain;
-            return "".concat(tex != null ? 'tex' : 'plain', "_").concat(tex !== null && tex !== void 0 ? tex : plain);
+            return ({ tex: tex, plain: plain });
         };
-        try {
-            for (var _b = __values(this.formulas), _c = _b.next(); !_c.done; _c = _b.next()) {
-                var formula = _c.value;
-                cache.set(key(formula), formula);
-            }
+        var formulas;
+        if (isEqual(this.formulas.map(extractText), inputs.map(extractText))) {
+            formulas = inputs.map(function (_a, i) {
+                var color = _a.color, fillAlpha = _a.fillAlpha;
+                return (__assign(__assign({}, _this.formulas[i]), { color: color, fillAlpha: fillAlpha }));
+            });
         }
-        catch (e_1_1) { e_1 = { error: e_1_1 }; }
-        finally {
+        else {
+            var cache_1 = new Map();
             try {
-                if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
+                for (var _b = __values(this.formulas), _c = _b.next(); !_c.done; _c = _b.next()) {
+                    var formula = _c.value;
+                    if (formula.parsed.type === 'eq')
+                        cache_1.set(formula.parsed.valueFuncCode, formula.parsed);
+                }
             }
-            finally { if (e_1) throw e_1.error; }
+            catch (e_1_1) { e_1 = { error: e_1_1 }; }
+            finally {
+                try {
+                    if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
+                }
+                finally { if (e_1) throw e_1.error; }
+            }
+            var textFormulas_1 = inputs.map(function (_a) {
+                var tex = _a.tex, plain = _a.plain;
+                try {
+                    return { text: tex != null ? (0, numcore_1.texToPlain)(tex) : plain };
+                }
+                catch (e) {
+                    return { text: '', error: String(e) };
+                }
+            });
+            var parseds_1 = (0, renderer_1.parseFormulas)(textFormulas_1.map(function (_a) {
+                var text = _a.text;
+                return text;
+            }));
+            formulas = inputs.map(function (input, index) {
+                var error = textFormulas_1[index].error;
+                if (error)
+                    return __assign(__assign({}, input), { parsed: { type: 'error', error: error } });
+                var parsed = parseds_1[index];
+                var fromCache = (parsed.type === 'eq' && cache_1.get(parsed.valueFuncCode)) || parsed;
+                return (__assign(__assign({}, input), { parsed: fromCache }));
+            });
         }
-        var formulas = input.map(function (input) {
-            var _a;
-            try {
-                var cached = cache.get(key(input));
-                if (cached === null || cached === void 0 ? void 0 : cached.error)
-                    throw cached === null || cached === void 0 ? void 0 : cached.error;
-                var parsed = (_a = cached === null || cached === void 0 ? void 0 : cached.parsed) !== null && _a !== void 0 ? _a : (0, renderer_1.parseFormula)(input.tex != null ? (0, numcore_1.texToPlain)(input.tex) : input.plain);
-                return __assign(__assign({}, input), { parsed: parsed });
-            }
-            catch (e) {
-                return __assign(__assign({}, input), { error: String(e) });
-            }
-        });
-        if (isEqual(this.formulas, formulas))
-            return;
+        var extractRendering = function (_a) {
+            var parsed = _a.parsed, color = _a.color, fillAlpha = _a.fillAlpha;
+            return parsed.type === 'eq' ? { parsed: parsed, color: color, fillAlpha: fillAlpha } : null;
+        };
+        if (!isEqual(this.formulas.map(extractRendering), formulas.map(extractRendering))) {
+            this.invalidatePanels();
+        }
         this.formulas = formulas;
-        this.invalidatePanels();
+        return this.formulas;
     };
     View.prototype.updateRendering = function (rendering) {
         if (isEqual(rendering, this.rendering))
@@ -231,12 +255,12 @@ var View = /** @class */ (function () {
                     yMax: (iy + 1) * dy
                 };
                 for (var i = 0; i < this.formulas.length; i++) {
-                    var formula = this.formulas[i];
+                    var _l = this.formulas[i], color = _l.color, parsed = _l.parsed, fillAlpha = _l.fillAlpha;
                     var canvas = canvases[i];
-                    if (formula.parsed) {
+                    if (parsed.type === 'eq' && color != null && color !== 'transparent') {
                         canvas.width = canvas.height = canvasSize;
                         (_e = canvas.getContext('2d')) === null || _e === void 0 ? void 0 : _e.clearRect(0, 0, canvasSize, canvasSize);
-                        (0, renderer_1.render)(canvas, panelSize, offset, range, formula.parsed, __assign({ lineWidth: lineWidth }, formula));
+                        (0, renderer_1.render)(canvas, panelSize, offset, range, parsed, { lineWidth: lineWidth, color: color, fillAlpha: fillAlpha !== null && fillAlpha !== void 0 ? fillAlpha : 0.5 });
                     }
                     else {
                         canvas.width = canvas.height = 0;
