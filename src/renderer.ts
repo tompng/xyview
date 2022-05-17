@@ -9,46 +9,36 @@ import {
   ValueFunction2D,
   extractVariables,
   RangeFunction2D,
+  Formula
 } from 'numcore'
 
-function parseExpression(exp: string): [UniqASTNode, Exclude<CompareMode, null>] {
-  const argNames = ['x', 'y']
-  let parsed = parse(exp, argNames, presets2D)
-  const astEquals = (ast: UniqASTNode, arg: 'x' | 'y'): UniqASTNode => ({ op: '-', args: [arg, ast], uniqId: -1, uniqKey: '' })
-  if (parsed.type === 'var') {
-    const name = exp.split('=')[0]
-    parsed = parse([exp, name], argNames, presets2D)[1]
-    if (extractVariables(parsed.ast!).length === 2) throw `cannot render ${name}`
-  } else if (parsed.type === 'func' && parsed.ast) {
-    const funcPart = exp.split('=')[0]
-    const match = funcPart.match(/(.+)\(([^,]+)\)/)
-    const cannotRenderMessage = `cannot render ${funcPart}`
-    if (!match) throw cannotRenderMessage
-    const name = match[1]
-    const arg = match[2]
-    const deps = [...new Set([arg, ...extractVariables(parsed.ast)])]
-    if (deps.length >= 2) throw cannotRenderMessage
-    const funcCall = `${name}(${deps[0] === 'y' ? 'y' : 'x'})`
-    const axis = deps[0] === 'y' ? 'x' : 'y'
-    parsed = parse([exp, `${axis}=${funcCall}`], argNames, presets2D)[1]
-  }
-  if (parsed.error != null || parsed.ast == null) throw parsed.error
-  if (parsed.type !== 'eq') throw 'not an equation'
-  const args = extractVariables(parsed.ast)
-  if (parsed.mode == null) {
-    if (args.length >= 2) throw 'not an equation'
-    if (args.length === 0 || (args.length === 1 && args[0] === 'x')) {
-      return [astEquals(parsed.ast, 'y'), '=']
-    }
-    if (args.length === 1 && args[0] === 'y') {
-      return [astEquals(parsed.ast, 'x'), '=']
-    }
-    throw 'not an equation'
-  }
-  return [parsed.ast, parsed.mode]
+function aliasExpression(exp: string, parsed: Formula): string | null {
+  if (!parsed.ast || parsed.type !== 'func') return null
+  const funcPart = exp.split('=')[0]
+  const match = funcPart.match(/(.+)\(([^,]+)\)/)
+  if (!match) return null
+  const name = match[1]
+  const arg = match[2]
+  const deps = [...new Set([arg, ...extractVariables(parsed.ast)])]
+  if (deps.length >= 2) return null
+  const funcCall = `${name}(${deps[0] === 'y' ? 'y' : 'x'})`
+  const axis = deps[0] === 'y' ? 'x' : 'y'
+  return `${axis}=${funcCall}`
 }
 
-export type ParsedFormula = {
+function convertAST(ast: UniqASTNode, mode: CompareMode): [UniqASTNode, CompareMode] {
+  const astEquals = (ast: UniqASTNode, arg: 'x' | 'y'): UniqASTNode => ({ op: '-', args: [arg, ast], uniqId: -1, uniqKey: '' })
+  const args = extractVariables(ast)
+  if (mode == null) {
+    if (args.length === 0 || (args.length === 1 && args[0] === 'x')) return [astEquals(ast, 'y'), '=']
+    if (args.length === 1 && args[0] === 'y') return [astEquals(ast, 'x'), '=']
+  }
+  return [ast, mode]
+}
+
+export type ParsedEquation = {
+  type: 'eq'
+  valueFuncCode: string
   valueFunc: ValueFunction2D
   rangeFunc: RangeFunction2D
   mode: {
@@ -57,15 +47,38 @@ export type ParsedFormula = {
     zero: boolean
   }
 }
+export type ParsedDefinition = { type: 'func' | 'var'; name: string }
+export type ParsedError = { type: 'error', error: string }
 
-export function parseFormula(exp: string): ParsedFormula {
-  const [ast, mode] = parseExpression(exp)
-  const positive = mode.includes('>')
-  const negative = mode.includes('<')
-  const zero = mode.includes('=')
-  const valueFunc: ValueFunction2D = eval(astToValueFunctionCode(ast, ['x', 'y']))
-  const rangeFunc: RangeFunction2D = eval(astToRangeFunctionCode(ast, ['x', 'y'], { pos: positive, neg: negative, eq: zero, zero }))
-  return { valueFunc, rangeFunc, mode: { positive, negative, zero } }
+export type ParsedFormula = ParsedEquation | ParsedDefinition | ParsedError
+
+export function parseFormulas(expressions: string[]): ParsedFormula[] {
+  const args = ['x', 'y']
+  let parseds = parse(expressions, args, presets2D)
+  const expressionsWithAlias = [...expressions]
+  const indices = parseds.map((parsed, index) => {
+    const alias = aliasExpression(expressions[index], parsed)
+    if (!alias) return index
+    expressionsWithAlias.push(alias)
+    return expressionsWithAlias.length - 1
+  })
+  if (expressions.length !== expressionsWithAlias.length) {
+    const reParseds = parse(expressionsWithAlias, args, presets2D)
+    parseds = indices.map(i => reParseds[i])
+  }
+  return parseds.map(parsed => {
+    if (parsed.type !== 'eq') return { type: parsed.type, name: parsed.name }
+    if (!parsed.ast) return { type: 'error', error: String(parsed.error) }
+    const [ast, mode] = convertAST(parsed.ast, parsed.mode)
+    if (mode == null) return { type: 'error', error: 'not an equation' }
+    const positive = mode.includes('>')
+    const negative = mode.includes('<')
+    const zero = mode.includes('=')
+    const valueFuncCode = astToValueFunctionCode(ast, ['x', 'y'])
+    const valueFunc: ValueFunction2D = eval(valueFuncCode)
+    const rangeFunc: RangeFunction2D = eval(astToRangeFunctionCode(ast, ['x', 'y'], { pos: positive, neg: negative, eq: zero, zero }))
+    return { type: 'eq', valueFuncCode, valueFunc, rangeFunc, mode: { positive, negative, zero } }
+  })
 }
 
 type RenderingRange = { xMin: number; xMax: number; yMin: number; yMax: number }
@@ -74,7 +87,7 @@ export function render(
   size: number,
   offset: number,
   range: RenderingRange,
-  formula: ParsedFormula,
+  formula: ParsedEquation,
   renderMode: {
     color: string
     lineWidth: number

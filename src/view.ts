@@ -1,4 +1,4 @@
-import { parseFormula, ParsedFormula, render } from './renderer'
+import { parseFormulas, ParsedFormula, render, ParsedEquation } from './renderer'
 import { texToPlain } from 'numcore'
 export type Size = { width: number; height: number }
 
@@ -17,17 +17,15 @@ export type Viewport = {
 }
 
 type FormulaAppearance = {
-  color: string
-  fillAlpha: number
+  color: string | null
+  fillAlpha?: number
 }
 
 type FormulaExpression =
   | { tex: string; plain?: undefined }
   | { tex?: undefined; plain: string }
 
-type FormulaResult =
-  | { parsed: ParsedFormula; error?: undefined }
-  | { parsed?: undefined; error: string }
+type FormulaResult = { parsed: ParsedFormula }
 
 export type FormulaInput = FormulaExpression & FormulaAppearance
 
@@ -90,25 +88,38 @@ export class View {
     this.canvas = document.createElement('canvas')
     this.update(info)
   }
-  updateFormulas(input: FormulaInput[]) {
-    const cache = new Map<string, FormulaResult>()
-    const key = ({ tex, plain }: FormulaInput) => `${tex != null ? 'tex' : 'plain'}_${tex ?? plain}`
-    for (const formula of this.formulas) {
-      cache.set(key(formula), formula)
-    }
-    const formulas: Formula[] = input.map(input => {
-      try {
-        const cached = cache.get(key(input))
-        if (cached?.error) throw cached?.error
-        const parsed = cached?.parsed ?? parseFormula(input.tex != null ? texToPlain(input.tex) : input.plain)
-        return { ...input, parsed }
-      } catch(e) {
-        return { ...input, error: String(e) }
+  updateFormulas(inputs: FormulaInput[]) {
+    const extractText = ({ tex, plain }: FormulaInput) => ({ tex, plain })
+    let formulas: Formula[]
+    if (isEqual(this.formulas.map(extractText), inputs.map(extractText))) {
+      formulas = inputs.map(({ color, fillAlpha }, i) => ({ ...this.formulas[i], color, fillAlpha }))
+    } else {
+      const cache = new Map<string, ParsedEquation>()
+      for (const formula of this.formulas) {
+        if (formula.parsed.type === 'eq') cache.set(formula.parsed.valueFuncCode, formula.parsed)
       }
-    })
-    if (isEqual(this.formulas, formulas)) return
+      const textFormulas = inputs.map(({ tex, plain }) => {
+        try {
+          return { text: tex != null ? texToPlain(tex) : plain }
+        } catch (e) {
+          return { text: '', error: String(e) }
+        }
+      })
+      const parseds = parseFormulas(textFormulas.map(({ text }) => text))
+      formulas = inputs.map((input, index) => {
+        const error = textFormulas[index].error
+        if (error) return { ...input, parsed: { type: 'error', error } }
+        const parsed = parseds[index]
+        const fromCache = (parsed.type === 'eq' && cache.get(parsed.valueFuncCode)) || parsed
+        return ({ ...input, parsed: fromCache })
+      })
+    }
+    const extractRendering = ({ parsed, color, fillAlpha }: Formula) => parsed.type === 'eq' ? { parsed, color, fillAlpha } : null
+    if (!isEqual(this.formulas.map(extractRendering), formulas.map(extractRendering))) {
+      this.invalidatePanels()
+    }
     this.formulas = formulas
-    this.invalidatePanels()
+    return this.formulas
   }
   updateRendering(rendering: RenderOption) {
     if (isEqual(rendering, this.rendering)) return
@@ -179,12 +190,12 @@ export class View {
           yMax: (iy + 1) * dy
         }
         for (let i = 0; i < this.formulas.length; i++) {
-          const formula = this.formulas[i]
+          const { color, parsed, fillAlpha } = this.formulas[i]
           const canvas = canvases[i]
-          if (formula.parsed) {
+          if (parsed.type === 'eq' && color != null && color !== 'transparent') {
             canvas.width = canvas.height = canvasSize
             canvas.getContext('2d')?.clearRect(0, 0, canvasSize, canvasSize)
-            render(canvas, panelSize, offset, range, formula.parsed, { lineWidth, ...formula })
+            render(canvas, panelSize, offset, range, parsed, { lineWidth, color, fillAlpha: fillAlpha ?? 0.5 })
           } else {
             canvas.width = canvas.height = 0
           }

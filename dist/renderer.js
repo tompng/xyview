@@ -25,61 +25,68 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
     return to.concat(ar || Array.prototype.slice.call(from));
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.render = exports.parseFormula = void 0;
+exports.render = exports.parseFormulas = void 0;
 var numcore_1 = require("numcore");
-function parseExpression(exp) {
-    var argNames = ['x', 'y'];
-    var parsed = (0, numcore_1.parse)(exp, argNames, numcore_1.presets2D);
+function aliasExpression(exp, parsed) {
+    if (!parsed.ast || parsed.type !== 'func')
+        return null;
+    var funcPart = exp.split('=')[0];
+    var match = funcPart.match(/(.+)\(([^,]+)\)/);
+    if (!match)
+        return null;
+    var name = match[1];
+    var arg = match[2];
+    var deps = __spreadArray([], __read(new Set(__spreadArray([arg], __read((0, numcore_1.extractVariables)(parsed.ast)), false))), false);
+    if (deps.length >= 2)
+        return null;
+    var funcCall = "".concat(name, "(").concat(deps[0] === 'y' ? 'y' : 'x', ")");
+    var axis = deps[0] === 'y' ? 'x' : 'y';
+    return "".concat(axis, "=").concat(funcCall);
+}
+function convertAST(ast, mode) {
     var astEquals = function (ast, arg) { return ({ op: '-', args: [arg, ast], uniqId: -1, uniqKey: '' }); };
-    if (parsed.type === 'var') {
-        var name_1 = exp.split('=')[0];
-        parsed = (0, numcore_1.parse)([exp, name_1], argNames, numcore_1.presets2D)[1];
-        if ((0, numcore_1.extractVariables)(parsed.ast).length === 2)
-            throw "cannot render ".concat(name_1);
+    var args = (0, numcore_1.extractVariables)(ast);
+    if (mode == null) {
+        if (args.length === 0 || (args.length === 1 && args[0] === 'x'))
+            return [astEquals(ast, 'y'), '='];
+        if (args.length === 1 && args[0] === 'y')
+            return [astEquals(ast, 'x'), '='];
     }
-    else if (parsed.type === 'func' && parsed.ast) {
-        var funcPart = exp.split('=')[0];
-        var match = funcPart.match(/(.+)\(([^,]+)\)/);
-        var cannotRenderMessage = "cannot render ".concat(funcPart);
-        if (!match)
-            throw cannotRenderMessage;
-        var name_2 = match[1];
-        var arg = match[2];
-        var deps = __spreadArray([], __read(new Set(__spreadArray([arg], __read((0, numcore_1.extractVariables)(parsed.ast)), false))), false);
-        if (deps.length >= 2)
-            throw cannotRenderMessage;
-        var funcCall = "".concat(name_2, "(").concat(deps[0] === 'y' ? 'y' : 'x', ")");
-        var axis = deps[0] === 'y' ? 'x' : 'y';
-        parsed = (0, numcore_1.parse)([exp, "".concat(axis, "=").concat(funcCall)], argNames, numcore_1.presets2D)[1];
-    }
-    if (parsed.error != null || parsed.ast == null)
-        throw parsed.error;
-    if (parsed.type !== 'eq')
-        throw 'not an equation';
-    var args = (0, numcore_1.extractVariables)(parsed.ast);
-    if (parsed.mode == null) {
-        if (args.length >= 2)
-            throw 'not an equation';
-        if (args.length === 0 || (args.length === 1 && args[0] === 'x')) {
-            return [astEquals(parsed.ast, 'y'), '='];
-        }
-        if (args.length === 1 && args[0] === 'y') {
-            return [astEquals(parsed.ast, 'x'), '='];
-        }
-        throw 'not an equation';
-    }
-    return [parsed.ast, parsed.mode];
+    return [ast, mode];
 }
-function parseFormula(exp) {
-    var _a = __read(parseExpression(exp), 2), ast = _a[0], mode = _a[1];
-    var positive = mode.includes('>');
-    var negative = mode.includes('<');
-    var zero = mode.includes('=');
-    var valueFunc = eval((0, numcore_1.astToValueFunctionCode)(ast, ['x', 'y']));
-    var rangeFunc = eval((0, numcore_1.astToRangeFunctionCode)(ast, ['x', 'y'], { pos: positive, neg: negative, eq: zero, zero: zero }));
-    return { valueFunc: valueFunc, rangeFunc: rangeFunc, mode: { positive: positive, negative: negative, zero: zero } };
+function parseFormulas(expressions) {
+    var args = ['x', 'y'];
+    var parseds = (0, numcore_1.parse)(expressions, args, numcore_1.presets2D);
+    var expressionsWithAlias = __spreadArray([], __read(expressions), false);
+    var indices = parseds.map(function (parsed, index) {
+        var alias = aliasExpression(expressions[index], parsed);
+        if (!alias)
+            return index;
+        expressionsWithAlias.push(alias);
+        return expressionsWithAlias.length - 1;
+    });
+    if (expressions.length !== expressionsWithAlias.length) {
+        var reParseds_1 = (0, numcore_1.parse)(expressionsWithAlias, args, numcore_1.presets2D);
+        parseds = indices.map(function (i) { return reParseds_1[i]; });
+    }
+    return parseds.map(function (parsed) {
+        if (parsed.type !== 'eq')
+            return { type: parsed.type, name: parsed.name };
+        if (!parsed.ast)
+            return { type: 'error', error: String(parsed.error) };
+        var _a = __read(convertAST(parsed.ast, parsed.mode), 2), ast = _a[0], mode = _a[1];
+        if (mode == null)
+            return { type: 'error', error: 'not an equation' };
+        var positive = mode.includes('>');
+        var negative = mode.includes('<');
+        var zero = mode.includes('=');
+        var valueFuncCode = (0, numcore_1.astToValueFunctionCode)(ast, ['x', 'y']);
+        var valueFunc = eval(valueFuncCode);
+        var rangeFunc = eval((0, numcore_1.astToRangeFunctionCode)(ast, ['x', 'y'], { pos: positive, neg: negative, eq: zero, zero: zero }));
+        return { type: 'eq', valueFuncCode: valueFuncCode, valueFunc: valueFunc, rangeFunc: rangeFunc, mode: { positive: positive, negative: negative, zero: zero } };
+    });
 }
-exports.parseFormula = parseFormula;
+exports.parseFormulas = parseFormulas;
 function render(canvas, size, offset, range, formula, renderMode) {
     var xFactor = size / (range.xMax - range.xMin);
     var xOffset = offset - size * range.xMin / (range.xMax - range.xMin);

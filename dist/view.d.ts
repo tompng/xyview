@@ -18,8 +18,8 @@ export declare type Viewport = {
     sizePerPixel: Vector2D;
 };
 declare type FormulaAppearance = {
-    color: string;
-    fillAlpha: number;
+    color: string | null;
+    fillAlpha?: number;
 };
 declare type FormulaExpression = {
     tex: string;
@@ -30,10 +30,6 @@ declare type FormulaExpression = {
 };
 declare type FormulaResult = {
     parsed: ParsedFormula;
-    error?: undefined;
-} | {
-    parsed?: undefined;
-    error: string;
 };
 export declare type FormulaInput = FormulaExpression & FormulaAppearance;
 export declare type Formula = FormulaInput & FormulaResult;
@@ -65,7 +61,7 @@ export declare class View {
     calculationTime: number;
     panels: Map<string, Panel>;
     constructor(info?: UpdateAttributes);
-    updateFormulas(input: FormulaInput[]): void;
+    updateFormulas(inputs: FormulaInput[]): Formula[];
     updateRendering(rendering: RenderOption): void;
     invalidatePanels(): void;
     updateSize({ width, height }: Size): void;

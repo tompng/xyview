@@ -1,5 +1,7 @@
 import { ValueFunction2D, RangeFunction2D } from 'numcore';
-export declare type ParsedFormula = {
+export declare type ParsedEquation = {
+    type: 'eq';
+    valueFuncCode: string;
     valueFunc: ValueFunction2D;
     rangeFunc: RangeFunction2D;
     mode: {
@@ -8,14 +10,23 @@ export declare type ParsedFormula = {
         zero: boolean;
     };
 };
-export declare function parseFormula(exp: string): ParsedFormula;
+export declare type ParsedDefinition = {
+    type: 'func' | 'var';
+    name: string;
+};
+export declare type ParsedError = {
+    type: 'error';
+    error: string;
+};
+export declare type ParsedFormula = ParsedEquation | ParsedDefinition | ParsedError;
+export declare function parseFormulas(expressions: string[]): ParsedFormula[];
 declare type RenderingRange = {
     xMin: number;
     xMax: number;
     yMin: number;
     yMax: number;
 };
-export declare function render(canvas: HTMLCanvasElement, size: number, offset: number, range: RenderingRange, formula: ParsedFormula, renderMode: {
+export declare function render(canvas: HTMLCanvasElement, size: number, offset: number, range: RenderingRange, formula: ParsedEquation, renderMode: {
     color: string;
     lineWidth: number;
     fillAlpha: number;

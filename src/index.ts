@@ -5,5 +5,7 @@ export {
   Viewport,
   FormulaInput,
   Formula,
-  UpdateAttributes
+  UpdateAttributes,
 } from './view'
+
+export type { ParsedFormula, ParsedEquation, ParsedDefinition, ParsedError } from './renderer'
