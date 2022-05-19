@@ -1,10 +1,11 @@
-import { ValueFunction2D, RangeFunction2D } from 'numcore';
+import { CompareMode, ValueFunction2D, RangeFunction2D } from 'numcore';
 export declare type ParsedEquation = {
     type: 'eq';
     valueFuncCode: string;
     valueFunc: ValueFunction2D;
     rangeFunc: RangeFunction2D;
-    mode: {
+    mode: NonNullable<CompareMode>;
+    fillMode: {
         positive: boolean;
         negative: boolean;
         zero: boolean;

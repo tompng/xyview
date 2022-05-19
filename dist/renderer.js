@@ -80,10 +80,11 @@ function parseFormulas(expressions) {
         var positive = mode.includes('>');
         var negative = mode.includes('<');
         var zero = mode.includes('=');
+        var fillMode = { positive: positive, negative: negative, zero: zero };
         var valueFuncCode = (0, numcore_1.astToValueFunctionCode)(ast, ['x', 'y']);
         var valueFunc = eval(valueFuncCode);
         var rangeFunc = eval((0, numcore_1.astToRangeFunctionCode)(ast, ['x', 'y'], { pos: positive, neg: negative, eq: zero, zero: zero }));
-        return { type: 'eq', valueFuncCode: valueFuncCode, valueFunc: valueFunc, rangeFunc: rangeFunc, mode: { positive: positive, negative: negative, zero: zero } };
+        return { type: 'eq', valueFuncCode: valueFuncCode, valueFunc: valueFunc, rangeFunc: rangeFunc, mode: mode, fillMode: fillMode };
     });
 }
 exports.parseFormulas = parseFormulas;
@@ -92,9 +93,7 @@ function render(canvas, size, offset, range, formula, renderMode) {
     var xOffset = offset - size * range.xMin / (range.xMax - range.xMin);
     var yFactor = size / (range.yMax - range.yMin);
     var yOffset = offset - size * range.yMin / (range.yMax - range.yMin);
-    var fValue = formula.valueFunc;
-    var fRange = formula.rangeFunc;
-    var fillMode = formula.mode;
+    var valueFunc = formula.valueFunc, rangeFunc = formula.rangeFunc, fillMode = formula.fillMode;
     var ctx = canvas.getContext('2d');
     ctx.fillStyle = renderMode.color;
     var BOTH = numcore_1.RangeResults.BOTH;
@@ -116,10 +115,10 @@ function render(canvas, size, offset, range, formula, renderMode) {
         var x1 = 0.25 * xMin + 0.75 * xMax;
         var y0 = 0.75 * yMin + 0.25 * yMax;
         var y1 = 0.25 * yMin + 0.75 * yMax;
-        var v00 = fValue(x0, y0);
-        var v01 = fValue(x0, y1);
-        var v10 = fValue(x1, y0);
-        var v11 = fValue(x1, y1);
+        var v00 = valueFunc(x0, y0);
+        var v01 = valueFunc(x0, y1);
+        var v10 = valueFunc(x1, y0);
+        var v11 = valueFunc(x1, y1);
         var alpha = 0;
         if (fillMode.zero) {
             alpha += ((v00 === 0 ? 1 : 0) + (v01 === 0 ? 1 : 0) + (v10 === 0 ? 1 : 0) + (v11 === 0 ? 1 : 0)) / 4;
@@ -140,12 +139,12 @@ function render(canvas, size, offset, range, formula, renderMode) {
         var values = new Array(size + 1);
         var nextValues = new Array(size + 1);
         for (var ix = 0; ix <= size; ix++)
-            values[ix] = fValue(xMin + ix * dx, yMin);
+            values[ix] = valueFunc(xMin + ix * dx, yMin);
         for (var iy = 1; iy <= size; iy++) {
             var y1 = yMin + iy * dy;
             var y0 = y1 - dy;
             for (var ix = 0; ix <= size; ix++)
-                nextValues[ix] = fValue(xMin + ix * dx, y1);
+                nextValues[ix] = valueFunc(xMin + ix * dx, y1);
             for (var ix = 0; ix < size; ix++) {
                 var x0 = xMin + ix * dx;
                 var x1 = x0 + dx;
@@ -154,7 +153,7 @@ function render(canvas, size, offset, range, formula, renderMode) {
                 var v01 = nextValues[ix];
                 var v11 = nextValues[ix + 1];
                 if (fillMode.negative || fillMode.positive || fillMode.zero) {
-                    if (fillMode.zero && fValue(x0 + dx / 2, y0 + dy / 2) === 0) {
+                    if (fillMode.zero && valueFunc(x0 + dx / 2, y0 + dy / 2) === 0) {
                         fill(x0, y0, 1);
                     }
                     else if (fillMode.negative) {
@@ -199,7 +198,7 @@ function render(canvas, size, offset, range, formula, renderMode) {
             var xMax = ranges[i + 1];
             var yMin = ranges[i + 2];
             var yMax = ranges[i + 3];
-            var result = fRange(xMin, xMax, yMin, yMax);
+            var result = rangeFunc(xMin, xMax, yMin, yMax);
             if (result >= 0) {
                 if (((fillMask >> result) & 1) === 1)
                     fill(xMin, yMin, currentSize);

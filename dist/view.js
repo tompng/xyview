@@ -103,12 +103,13 @@ var View = /** @class */ (function () {
             });
         }
         else {
+            var cacheKey_1 = function (parsed) { return "".concat(parsed.mode, " ").concat(parsed.valueFuncCode); };
             var cache_1 = new Map();
             try {
                 for (var _b = __values(this.formulas), _c = _b.next(); !_c.done; _c = _b.next()) {
                     var formula = _c.value;
                     if (formula.parsed.type === 'eq')
-                        cache_1.set(formula.parsed.valueFuncCode, formula.parsed);
+                        cache_1.set(cacheKey_1(formula.parsed), formula.parsed);
                 }
             }
             catch (e_1_1) { e_1 = { error: e_1_1 }; }
@@ -136,7 +137,7 @@ var View = /** @class */ (function () {
                 if (error)
                     return __assign(__assign({}, input), { parsed: { type: 'error', error: error } });
                 var parsed = parseds_1[index];
-                var fromCache = (parsed.type === 'eq' && cache_1.get(parsed.valueFuncCode)) || parsed;
+                var fromCache = (parsed.type === 'eq' && cache_1.get(cacheKey_1(parsed))) || parsed;
                 return (__assign(__assign({}, input), { parsed: fromCache }));
             });
         }
