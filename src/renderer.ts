@@ -41,7 +41,8 @@ export type ParsedEquation = {
   valueFuncCode: string
   valueFunc: ValueFunction2D
   rangeFunc: RangeFunction2D
-  mode: {
+  mode: NonNullable<CompareMode>
+  fillMode: {
     positive: boolean
     negative: boolean
     zero: boolean
@@ -74,10 +75,11 @@ export function parseFormulas(expressions: string[]): ParsedFormula[] {
     const positive = mode.includes('>')
     const negative = mode.includes('<')
     const zero = mode.includes('=')
+    const fillMode = { positive, negative, zero }
     const valueFuncCode = astToValueFunctionCode(ast, ['x', 'y'])
     const valueFunc: ValueFunction2D = eval(valueFuncCode)
     const rangeFunc: RangeFunction2D = eval(astToRangeFunctionCode(ast, ['x', 'y'], { pos: positive, neg: negative, eq: zero, zero }))
-    return { type: 'eq', valueFuncCode, valueFunc, rangeFunc, mode: { positive, negative, zero } }
+    return { type: 'eq', valueFuncCode, valueFunc, rangeFunc, mode, fillMode }
   })
 }
 
@@ -98,9 +100,7 @@ export function render(
   const xOffset = offset - size * range.xMin / (range.xMax - range.xMin)
   const yFactor = size / (range.yMax - range.yMin)
   const yOffset = offset - size * range.yMin / (range.yMax - range.yMin)
-  const fValue = formula.valueFunc
-  const fRange = formula.rangeFunc
-  const fillMode = formula.mode
+  const { valueFunc, rangeFunc, fillMode } = formula
   const ctx = canvas.getContext('2d')!
   ctx.fillStyle = renderMode.color
   const { BOTH } = RangeResults
@@ -121,10 +121,10 @@ export function render(
     const x1 = 0.25 * xMin + 0.75 * xMax
     const y0 = 0.75 * yMin + 0.25 * yMax
     const y1 = 0.25 * yMin + 0.75 * yMax
-    const v00 = fValue(x0, y0)
-    const v01 = fValue(x0, y1)
-    const v10 = fValue(x1, y0)
-    const v11 = fValue(x1, y1)
+    const v00 = valueFunc(x0, y0)
+    const v01 = valueFunc(x0, y1)
+    const v10 = valueFunc(x1, y0)
+    const v11 = valueFunc(x1, y1)
     let alpha = 0
     if (fillMode.zero) {
       alpha += ((v00 === 0 ? 1 : 0) + (v01 === 0 ? 1 : 0) + (v10 === 0 ? 1 : 0) + (v11 === 0 ? 1 : 0)) / 4
@@ -141,11 +141,11 @@ export function render(
     const dy = (yMax - yMin) / size
     let values = new Array<number>(size + 1)
     let nextValues = new Array<number>(size + 1)
-    for (let ix = 0; ix <= size; ix++) values[ix] = fValue(xMin + ix * dx, yMin)
+    for (let ix = 0; ix <= size; ix++) values[ix] = valueFunc(xMin + ix * dx, yMin)
     for (let iy = 1; iy <= size; iy++) {
       const y1 = yMin + iy * dy
       const y0 = y1 - dy
-      for (let ix = 0; ix <= size; ix++) nextValues[ix] = fValue(xMin + ix * dx, y1)
+      for (let ix = 0; ix <= size; ix++) nextValues[ix] = valueFunc(xMin + ix * dx, y1)
       for (let ix = 0; ix < size; ix++) {
         const x0 = xMin + ix * dx
         const x1 = x0 + dx
@@ -154,7 +154,7 @@ export function render(
         const v01 = nextValues[ix]
         const v11 = nextValues[ix + 1]
         if (fillMode.negative || fillMode.positive || fillMode.zero) {
-          if (fillMode.zero && fValue(x0 + dx / 2, y0 + dy / 2) === 0) {
+          if (fillMode.zero && valueFunc(x0 + dx / 2, y0 + dy / 2) === 0) {
             fill(x0, y0, 1)
           } else if (fillMode.negative) {
             if (v00 < 0 && v01 < 0 && v10 < 0 && v11 < 0) {
@@ -192,7 +192,7 @@ export function render(
       const xMax = ranges[i + 1]
       const yMin = ranges[i + 2]
       const yMax = ranges[i + 3]
-      const result = fRange(xMin, xMax, yMin, yMax)
+      const result = rangeFunc(xMin, xMax, yMin, yMax)
       if (result >= 0) {
         if (((fillMask >> result) & 1) === 1) fill(xMin, yMin, currentSize)
       } else if (result === BOTH && currentSize <= 8) {

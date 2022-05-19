@@ -94,9 +94,10 @@ export class View {
     if (isEqual(this.formulas.map(extractText), inputs.map(extractText))) {
       formulas = inputs.map(({ color, fillAlpha }, i) => ({ ...this.formulas[i], color, fillAlpha }))
     } else {
+      const cacheKey = (parsed: ParsedEquation) => `${parsed.mode} ${parsed.valueFuncCode}`
       const cache = new Map<string, ParsedEquation>()
       for (const formula of this.formulas) {
-        if (formula.parsed.type === 'eq') cache.set(formula.parsed.valueFuncCode, formula.parsed)
+        if (formula.parsed.type === 'eq') cache.set(cacheKey(formula.parsed), formula.parsed)
       }
       const textFormulas = inputs.map(({ tex, plain }) => {
         try {
@@ -110,7 +111,7 @@ export class View {
         const error = textFormulas[index].error
         if (error) return { ...input, parsed: { type: 'error', error } }
         const parsed = parseds[index]
-        const fromCache = (parsed.type === 'eq' && cache.get(parsed.valueFuncCode)) || parsed
+        const fromCache = (parsed.type === 'eq' && cache.get(cacheKey(parsed))) || parsed
         return ({ ...input, parsed: fromCache })
       })
     }
