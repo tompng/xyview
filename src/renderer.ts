@@ -8,32 +8,17 @@ import {
   CompareMode,
   ValueFunction2D,
   extractVariables,
-  RangeFunction2D,
-  Formula
+  RangeFunction2D
 } from 'numcore'
-
-function aliasExpression(exp: string, parsed: Formula): string | null {
-  if (!parsed.ast || parsed.type !== 'func') return null
-  const funcPart = exp.split('=')[0]
-  const match = funcPart.match(/(.+)\(([^,]+)\)/)
-  if (!match) return null
-  const name = match[1]
-  const arg = match[2]
-  const deps = [...new Set([arg, ...extractVariables(parsed.ast)])]
-  if (deps.length >= 2) return null
-  const funcCall = `${name}(${deps[0] === 'y' ? 'y' : 'x'})`
-  const axis = deps[0] === 'y' ? 'x' : 'y'
-  return `${axis}=${funcCall}`
-}
 
 function convertAST(ast: UniqASTNode, mode: CompareMode): [UniqASTNode, CompareMode] {
   const astEquals = (ast: UniqASTNode, arg: 'x' | 'y'): UniqASTNode => ({ op: '-', args: [arg, ast], uniqId: -1, uniqKey: '' })
-  const args = extractVariables(ast)
-  if (mode == null) {
-    if (args.length === 0 || (args.length === 1 && args[0] === 'x')) return [astEquals(ast, 'y'), '=']
-    if (args.length === 1 && args[0] === 'y') return [astEquals(ast, 'x'), '=']
+  const vars = extractVariables(ast)
+  if (mode == null && !vars.some(name => name != 'x')) {
+    return [astEquals(ast, 'y'), '=']
+  } else {
+    return [ast, mode]
   }
-  return [ast, mode]
 }
 
 export type ParsedEquation = {
@@ -48,26 +33,24 @@ export type ParsedEquation = {
     zero: boolean
   }
 }
+export type ParsedBlank = { type: 'blank' }
 export type ParsedDefinition = { type: 'func' | 'var'; name: string }
 export type ParsedError = { type: 'error', error: string }
 
-export type ParsedFormula = ParsedEquation | ParsedDefinition | ParsedError
+export type ParsedFormula = ParsedEquation | ParsedDefinition | ParsedError | ParsedBlank
 
 export function parseFormulas(expressions: string[]): ParsedFormula[] {
   const args = ['x', 'y']
-  let parseds = parse(expressions, args, presets2D)
-  const expressionsWithAlias = [...expressions]
-  const indices = parseds.map((parsed, index) => {
-    const alias = aliasExpression(expressions[index], parsed)
-    if (!alias) return index
-    expressionsWithAlias.push(alias)
-    return expressionsWithAlias.length - 1
+  const presentExpressions: string[] = []
+  const indices = expressions.map(exp => {
+    if (exp.match(/^\s*$/)) return null
+    presentExpressions.push(exp)
+    return presentExpressions.length - 1
   })
-  if (expressions.length !== expressionsWithAlias.length) {
-    const reParseds = parse(expressionsWithAlias, args, presets2D)
-    parseds = indices.map(i => reParseds[i])
-  }
-  return parseds.map(parsed => {
+  const results = parse(presentExpressions, args, presets2D)
+  return indices.map(index => {
+    if (index == null) return { type: 'blank' }
+    const parsed = results[index]
     if (parsed.type !== 'eq') return { type: parsed.type, name: parsed.name }
     if (!parsed.ast) return { type: 'error', error: String(parsed.error) }
     const [ast, mode] = convertAST(parsed.ast, parsed.mode)
