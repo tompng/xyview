@@ -11,6 +11,9 @@ export declare type ParsedEquation = {
         zero: boolean;
     };
 };
+export declare type ParsedBlank = {
+    type: 'blank';
+};
 export declare type ParsedDefinition = {
     type: 'func' | 'var';
     name: string;
@@ -19,7 +22,7 @@ export declare type ParsedError = {
     type: 'error';
     error: string;
 };
-export declare type ParsedFormula = ParsedEquation | ParsedDefinition | ParsedError;
+export declare type ParsedFormula = ParsedEquation | ParsedDefinition | ParsedError | ParsedBlank;
 export declare function parseFormulas(expressions: string[]): ParsedFormula[];
 declare type RenderingRange = {
     xMin: number;

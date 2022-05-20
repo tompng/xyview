@@ -15,61 +15,33 @@ var __read = (this && this.__read) || function (o, n) {
     }
     return ar;
 };
-var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
-    if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
-        if (ar || !(i in from)) {
-            if (!ar) ar = Array.prototype.slice.call(from, 0, i);
-            ar[i] = from[i];
-        }
-    }
-    return to.concat(ar || Array.prototype.slice.call(from));
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.render = exports.parseFormulas = void 0;
 var numcore_1 = require("numcore");
-function aliasExpression(exp, parsed) {
-    if (!parsed.ast || parsed.type !== 'func')
-        return null;
-    var funcPart = exp.split('=')[0];
-    var match = funcPart.match(/(.+)\(([^,]+)\)/);
-    if (!match)
-        return null;
-    var name = match[1];
-    var arg = match[2];
-    var deps = __spreadArray([], __read(new Set(__spreadArray([arg], __read((0, numcore_1.extractVariables)(parsed.ast)), false))), false);
-    if (deps.length >= 2)
-        return null;
-    var funcCall = "".concat(name, "(").concat(deps[0] === 'y' ? 'y' : 'x', ")");
-    var axis = deps[0] === 'y' ? 'x' : 'y';
-    return "".concat(axis, "=").concat(funcCall);
-}
 function convertAST(ast, mode) {
     var astEquals = function (ast, arg) { return ({ op: '-', args: [arg, ast], uniqId: -1, uniqKey: '' }); };
-    var args = (0, numcore_1.extractVariables)(ast);
-    if (mode == null) {
-        if (args.length === 0 || (args.length === 1 && args[0] === 'x'))
-            return [astEquals(ast, 'y'), '='];
-        if (args.length === 1 && args[0] === 'y')
-            return [astEquals(ast, 'x'), '='];
+    var vars = (0, numcore_1.extractVariables)(ast);
+    if (mode == null && !vars.some(function (name) { return name != 'x'; })) {
+        return [astEquals(ast, 'y'), '='];
     }
-    return [ast, mode];
+    else {
+        return [ast, mode];
+    }
 }
 function parseFormulas(expressions) {
     var args = ['x', 'y'];
-    var parseds = (0, numcore_1.parse)(expressions, args, numcore_1.presets2D);
-    var expressionsWithAlias = __spreadArray([], __read(expressions), false);
-    var indices = parseds.map(function (parsed, index) {
-        var alias = aliasExpression(expressions[index], parsed);
-        if (!alias)
-            return index;
-        expressionsWithAlias.push(alias);
-        return expressionsWithAlias.length - 1;
+    var presentExpressions = [];
+    var indices = expressions.map(function (exp) {
+        if (exp.match(/^\s*$/))
+            return null;
+        presentExpressions.push(exp);
+        return presentExpressions.length - 1;
     });
-    if (expressions.length !== expressionsWithAlias.length) {
-        var reParseds_1 = (0, numcore_1.parse)(expressionsWithAlias, args, numcore_1.presets2D);
-        parseds = indices.map(function (i) { return reParseds_1[i]; });
-    }
-    return parseds.map(function (parsed) {
+    var results = (0, numcore_1.parse)(presentExpressions, args, numcore_1.presets2D);
+    return indices.map(function (index) {
+        if (index == null)
+            return { type: 'blank' };
+        var parsed = results[index];
         if (parsed.type !== 'eq')
             return { type: parsed.type, name: parsed.name };
         if (!parsed.ast)
