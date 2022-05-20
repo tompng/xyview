@@ -52,17 +52,21 @@ export function parseFormulas(expressions: string[]): ParsedFormula[] {
     if (index == null) return { type: 'blank' }
     const parsed = results[index]
     if (parsed.type !== 'eq') return { type: parsed.type, name: parsed.name }
-    if (!parsed.ast) return { type: 'error', error: String(parsed.error) }
+    if (parsed.ast == null) return { type: 'error', error: String(parsed.error) }
     const [ast, mode] = convertAST(parsed.ast, parsed.mode)
     if (mode == null) return { type: 'error', error: 'not an equation' }
     const positive = mode.includes('>')
     const negative = mode.includes('<')
     const zero = mode.includes('=')
     const fillMode = { positive, negative, zero }
-    const valueFuncCode = astToValueFunctionCode(ast, ['x', 'y'])
-    const valueFunc: ValueFunction2D = eval(valueFuncCode)
-    const rangeFunc: RangeFunction2D = eval(astToRangeFunctionCode(ast, ['x', 'y'], { pos: positive, neg: negative, eq: zero, zero }))
-    return { type: 'eq', valueFuncCode, valueFunc, rangeFunc, mode, fillMode }
+    try {
+      const valueFuncCode = astToValueFunctionCode(ast, ['x', 'y'])
+      const valueFunc: ValueFunction2D = eval(valueFuncCode)
+      const rangeFunc: RangeFunction2D = eval(astToRangeFunctionCode(ast, ['x', 'y'], { pos: positive, neg: negative, eq: zero, zero }))
+      return { type: 'eq', valueFuncCode, valueFunc, rangeFunc, mode, fillMode }
+    } catch (e) {
+      return { type: 'error', error: String(e) }
+    }
   })
 }
 

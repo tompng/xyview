@@ -44,7 +44,7 @@ function parseFormulas(expressions) {
         var parsed = results[index];
         if (parsed.type !== 'eq')
             return { type: parsed.type, name: parsed.name };
-        if (!parsed.ast)
+        if (parsed.ast == null)
             return { type: 'error', error: String(parsed.error) };
         var _a = __read(convertAST(parsed.ast, parsed.mode), 2), ast = _a[0], mode = _a[1];
         if (mode == null)
@@ -53,10 +53,15 @@ function parseFormulas(expressions) {
         var negative = mode.includes('<');
         var zero = mode.includes('=');
         var fillMode = { positive: positive, negative: negative, zero: zero };
-        var valueFuncCode = (0, numcore_1.astToValueFunctionCode)(ast, ['x', 'y']);
-        var valueFunc = eval(valueFuncCode);
-        var rangeFunc = eval((0, numcore_1.astToRangeFunctionCode)(ast, ['x', 'y'], { pos: positive, neg: negative, eq: zero, zero: zero }));
-        return { type: 'eq', valueFuncCode: valueFuncCode, valueFunc: valueFunc, rangeFunc: rangeFunc, mode: mode, fillMode: fillMode };
+        try {
+            var valueFuncCode = (0, numcore_1.astToValueFunctionCode)(ast, ['x', 'y']);
+            var valueFunc = eval(valueFuncCode);
+            var rangeFunc = eval((0, numcore_1.astToRangeFunctionCode)(ast, ['x', 'y'], { pos: positive, neg: negative, eq: zero, zero: zero }));
+            return { type: 'eq', valueFuncCode: valueFuncCode, valueFunc: valueFunc, rangeFunc: rangeFunc, mode: mode, fillMode: fillMode };
+        }
+        catch (e) {
+            return { type: 'error', error: String(e) };
+        }
     });
 }
 exports.parseFormulas = parseFormulas;
