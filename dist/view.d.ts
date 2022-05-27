@@ -4,6 +4,8 @@ export declare type Size = {
     height: number;
 };
 export declare type RenderOption = {
+    background: string | null;
+    order: ('axis' | 'graph' | 'label')[];
     lineWidth: number;
     axisInterval: number | null;
     axisWidth: number;
@@ -64,11 +66,22 @@ export declare class View {
     updateFormulas(inputs: FormulaInput[]): Formula[];
     updateRendering(rendering: RenderOption): void;
     invalidatePanels(): void;
+    release(): void;
     updateSize({ width, height }: Size): void;
     updateViewport(viewport: Viewport): void;
     update({ size, viewport, rendering, formulas, calcPaused }: UpdateAttributes): void;
+    panelRange(): {
+        ixMin: number;
+        ixMax: number;
+        iyMin: number;
+        iyMax: number;
+    };
+    isCalculationCompleted(): boolean;
     calculate(): void;
-    render(): void;
-    renderAxis(ctx: CanvasRenderingContext2D): void;
+    render(calculate?: boolean): void;
+    prepareAxisLabelRenderer(ctx: CanvasRenderingContext2D): {
+        renderLabel: () => void;
+        renderAxis: () => void;
+    };
 }
 export {};
