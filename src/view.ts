@@ -3,6 +3,7 @@ import { texToPlain } from 'numcore'
 export type Size = { width: number; height: number }
 
 export type RenderOption = {
+  background: string | null
   lineWidth: number
   axisInterval: number | null
   axisWidth: number
@@ -81,7 +82,7 @@ export class View {
   calculationTime = 100
   panels = new Map<string, Panel>()
   constructor(info: UpdateAttributes = {}) {
-    this.rendering = { lineWidth: 2, axisWidth: 2, axisInterval: 120, labelSize: 14, ...info.rendering }
+    this.rendering = { lineWidth: 2, axisWidth: 2, axisInterval: 120, labelSize: 14, background: 'white', ...info.rendering }
     this.viewport = { center: { x: 0, y: 0 }, sizePerPixel: { x: 1 / 256, y: 1 / 256 }, ...info.viewport }
     this.width = Math.round(info.size?.width ?? 256)
     this.height = Math.round(info.size?.height ?? 256)
@@ -155,20 +156,36 @@ export class View {
     if (rendering) this.updateRendering({ ...this.rendering, ...rendering })
     if (size) this.updateSize({ width: this.width, height: this.height, ...size })
     if (viewport) this.updateViewport({ ...this.viewport, ...viewport })
-    this.render()
+  }
+  panelRange() {
+    const { width, height, viewport, panelSize } = this
+    const { center, sizePerPixel } = viewport
+    const ixBase = -center.x / sizePerPixel.x
+    const iyBase = -center.y / sizePerPixel.y
+    return {
+      ixMin: Math.ceil((-width / 2 - ixBase) / panelSize) - 1,
+      ixMax: Math.floor((width / 2 - ixBase) / panelSize),
+      iyMin: Math.ceil((-height / 2 - iyBase) / panelSize) - 1,
+      iyMax: Math.floor((height / 2 - iyBase) / panelSize),
+    }
+  }
+  isCalculationCompleted() {
+    const { panels } = this
+    const { ixMin, ixMax, iyMin, iyMax } = this.panelRange()
+    for (let ix = ixMin; ix <= ixMax; ix++) {
+      for (let iy = iyMin; iy <= iyMax; iy++) {
+        if (!panels.has(`${ix}/${iy}`)) return false
+      }
+    }
+    return true
   }
   calculate() {
-    const { width, height, panels, panelSize, calculationTime } = this
-    const { center, sizePerPixel } = this.viewport
+    const { panels, panelSize, calculationTime } = this
+    const { sizePerPixel } = this.viewport
     const startTime = performance.now()
     const { lineWidth } = this.rendering
     const offset = Math.ceil(lineWidth / 2) + 2
-    const ixBase = -center.x / sizePerPixel.x
-    const iyBase = -center.y / sizePerPixel.y
-    const ixMin = Math.ceil((-width / 2 - ixBase) / panelSize) - 1
-    const ixMax = Math.floor((width / 2 - ixBase) / panelSize)
-    const iyMin = Math.ceil((-height / 2 - iyBase) / panelSize) - 1
-    const iyMax = Math.floor((height / 2 - iyBase) / panelSize)
+    const { ixMin, ixMax, iyMin, iyMax } = this.panelRange()
     const unusedPanels: Panel[] = []
     const dx = sizePerPixel.x * panelSize
     const dy = sizePerPixel.y * panelSize
@@ -202,15 +219,12 @@ export class View {
           }
         }
         panels.set(key, { ix, iy, dx, dy, canvases })
-        if (performance.now() > startTime + calculationTime) {
-          this.needsRender = true
-          break
-        }
+        if (performance.now() > startTime + calculationTime) break
       }
     }
     for (const panel of unusedPanels) panel.canvases.forEach(releaseCanvas)
   }
-  render() {
+  render(calculate = true) {
     if (!this.needsRender) return
     const { canvas, width, height, panels, panelSize } = this
     const { center, sizePerPixel } = this.viewport
@@ -220,9 +234,13 @@ export class View {
     }
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    this.needsRender = false
-    if (!this.calcPaused) this.calculate()
+    this.needsRender = !this.isCalculationCompleted()
+    if (!this.calcPaused && calculate) this.calculate()
     ctx.clearRect(0, 0, width, height)
+    if (this.rendering.background != null && this.rendering.background !== 'transparent') {
+      ctx.fillStyle = this.rendering.background
+      ctx.fillRect(0, 0, width, height)
+    }
     ctx.save()
     ctx.scale(1, -1)
     for (let i = 0; i < this.formulas.length; i++) {
