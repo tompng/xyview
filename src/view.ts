@@ -143,6 +143,10 @@ export class View {
     this.panels.clear()
     this.needsRender = true
   }
+  release() {
+    this.invalidatePanels()
+    releaseCanvas(this.canvas)
+  }
   updateSize({ width, height }: Size) {
     width = Math.round(width)
     height = Math.round(height)
