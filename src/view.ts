@@ -4,6 +4,7 @@ export type Size = { width: number; height: number }
 
 export type RenderOption = {
   background: string | null
+  order: ('axis' | 'graph' | 'label')[]
   lineWidth: number
   axisInterval: number | null
   axisWidth: number
@@ -69,6 +70,14 @@ function releaseCanvas(canvas: HTMLCanvasElement) {
   canvas.width = canvas.height = 0
 }
 
+const defaultRenderOption: RenderOption = {
+  lineWidth: 2,
+  axisWidth: 2,
+  axisInterval: 120,
+  labelSize: 14,
+  background: 'white',
+  order: ['axis', 'graph', 'label']
+}
 export class View {
   canvas: HTMLCanvasElement
   width: number
@@ -82,7 +91,7 @@ export class View {
   calculationTime = 100
   panels = new Map<string, Panel>()
   constructor(info: UpdateAttributes = {}) {
-    this.rendering = { lineWidth: 2, axisWidth: 2, axisInterval: 120, labelSize: 14, background: 'white', ...info.rendering }
+    this.rendering = { ...defaultRenderOption, ...info.rendering }
     this.viewport = { center: { x: 0, y: 0 }, sizePerPixel: { x: 1 / 256, y: 1 / 256 }, ...info.viewport }
     this.width = Math.round(info.size?.width ?? 256)
     this.height = Math.round(info.size?.height ?? 256)
@@ -241,36 +250,43 @@ export class View {
       ctx.fillStyle = this.rendering.background
       ctx.fillRect(0, 0, width, height)
     }
-    ctx.save()
-    ctx.scale(1, -1)
-    for (let i = 0; i < this.formulas.length; i++) {
-      for (const [_key, panel] of panels) {
-        const image = panel.canvases[i]
-        if (image.width === 0) continue
-        const offsetX = (image.width - panelSize) / 2
-        const offsetY = (image.height - panelSize) / 2
-        const left = Math.round(width / 2 + (panel.dx * panel.ix - center.x) / sizePerPixel.x)
-        const right = Math.round(width / 2 + (panel.dx * (panel.ix + 1) - center.x) / sizePerPixel.x)
-        const bottom = Math.round(height / 2 + (panel.dy * panel.iy - center.y) / sizePerPixel.y)
-        const top = Math.round(height / 2 + (panel.dy * (panel.iy + 1) - center.y) / sizePerPixel.y)
-        ctx.drawImage(
-          image,
-          left - offsetX * (right - left) / panelSize,
-          bottom - height - offsetY * (top - bottom) / panelSize,
-          (right - left) * image.width / panelSize,
-          (top - bottom) * image.height / panelSize
-        )
+    const renderGraph = () => {
+      ctx.save()
+      ctx.scale(1, -1)
+      for (let i = 0; i < this.formulas.length; i++) {
+        for (const [_key, panel] of panels) {
+          const image = panel.canvases[i]
+          if (image.width === 0) continue
+          const offsetX = (image.width - panelSize) / 2
+          const offsetY = (image.height - panelSize) / 2
+          const left = Math.round(width / 2 + (panel.dx * panel.ix - center.x) / sizePerPixel.x)
+          const right = Math.round(width / 2 + (panel.dx * (panel.ix + 1) - center.x) / sizePerPixel.x)
+          const bottom = Math.round(height / 2 + (panel.dy * panel.iy - center.y) / sizePerPixel.y)
+          const top = Math.round(height / 2 + (panel.dy * (panel.iy + 1) - center.y) / sizePerPixel.y)
+          ctx.drawImage(
+            image,
+            left - offsetX * (right - left) / panelSize,
+            bottom - height - offsetY * (top - bottom) / panelSize,
+            (right - left) * image.width / panelSize,
+            (top - bottom) * image.height / panelSize
+          )
+        }
       }
+      ctx.restore()
     }
-    ctx.restore()
-    this.renderAxis(ctx)
+    const { renderLabel, renderAxis } = this.prepareAxisLabelRenderer(ctx)
+    for (const mode of this.rendering.order) {
+      if (mode === 'label') renderLabel()
+      if (mode === 'axis') renderAxis()
+      if (mode === 'graph') renderGraph()
+    }
   }
-  renderAxis(ctx: CanvasRenderingContext2D) {
+  prepareAxisLabelRenderer(ctx: CanvasRenderingContext2D) {
     const minIntervalPixel = this.rendering.axisInterval
-    if (!minIntervalPixel) return
+    if (!minIntervalPixel) return { renderLabel: () => {}, renderAxis: () => {} }
     const fontSize = this.rendering.labelSize
-    ctx.save()
-    const { width, height, panels, panelSize } = this
+    const font = fontSize ? `bold ${fontSize}px sans-serif` : null
+    const { width, height } = this
     const { center, sizePerPixel } = this.viewport
     const xSize = width * sizePerPixel.x
     const ySize = height * sizePerPixel.y
@@ -285,26 +301,21 @@ export class View {
         return [10 * base, 5]
       }
     }
-    if (fontSize) ctx.font = `bold ${fontSize}px sans-serif`
     const labels: { text: string; x: number; y: number; align: 'left' | 'center' | 'right'; baseline: 'middle' | 'top' | 'bottom' }[] = []
     const xConvert = (x: number) => width / 2 + (x - center.x) / sizePerPixel.x
     const yConvert = (y: number) => height / 2 - (y - center.y) / sizePerPixel.y
     const canvasX0 = xConvert(0)
     const canvasY0 = yConvert(0)
     const labelText = (n: number) => n.toFixed(10).replace(/\.?0+$/, '')
-    ctx.lineWidth = this.rendering.axisWidth
-    ctx.strokeStyle = 'black'
-    const renderXAxis = (mainInterval: number, division: number, renderZeroLabel: boolean) => {
+    const lines: [startX: number, startY: number, endX: number, endY: number, opacity: number][] = []
+    const prepareXAxis = (mainInterval: number, division: number, renderZeroLabel: boolean) => {
       const ixMin = Math.ceil((-width * sizePerPixel.x / 2 + center.x) / mainInterval * division)
       const ixMax = Math.floor((width * sizePerPixel.x / 2 + center.x) / mainInterval * division)
       for (let ix = ixMin; ix <= ixMax; ix++) {
         const x = ix * mainInterval / division
         const canvasX = xConvert(ix * mainInterval / division)
-        ctx.globalAlpha = ix === 0 ? 1 : ix % division === 0 ? 0.5 : 0.1
-        ctx.beginPath()
-        ctx.moveTo(canvasX, 0)
-        ctx.lineTo(canvasX, height)
-        ctx.stroke()
+        const opacity = ix === 0 ? 1 : ix % division === 0 ? 0.5 : 0.1
+        lines.push([canvasX, 0, canvasX, height, opacity])
         if (fontSize && ix % division === 0 && (renderZeroLabel || ix !== 0)) {
           labels.push({
             text: labelText(x),
@@ -316,7 +327,7 @@ export class View {
         }
       }
     }
-    const renderYAxis = (mainInterval: number, division: number, renderZeroLabel: boolean) => {
+    const prepareYAxis = (mainInterval: number, division: number, renderZeroLabel: boolean) => {
       const iyMin = Math.ceil((-height * sizePerPixel.y / 2 + center.y) / mainInterval * division)
       const iyMax = Math.floor((height * sizePerPixel.y / 2 + center.y) / mainInterval * division)
       let labelMaxWidth = 0
@@ -326,11 +337,8 @@ export class View {
       for (let iy = iyMin; iy <= iyMax; iy++) {
         const y = iy * mainInterval / division
         const canvasY = yConvert(y)
-        ctx.globalAlpha = (iy === 0 ? 1 : iy % division === 0 ? 0.5 : 0.1)
-        ctx.beginPath()
-        ctx.moveTo(0, canvasY)
-        ctx.lineTo(width, canvasY)
-        ctx.stroke()
+        const opacity = (iy === 0 ? 1 : iy % division === 0 ? 0.5 : 0.1)
+        lines.push([0, canvasY, width, canvasY, opacity])
         if (fontSize && iy % division === 0 && (renderZeroLabel || iy !== 0)) {
           const labelX = canvasX0 + fontSize / 4
           const text = labelText(y)
@@ -354,28 +362,51 @@ export class View {
       })
     }
     const scaleRatio = sizePerPixel.x / sizePerPixel.y
+    ctx.save()
+    if (font) ctx.font = font
     if (4 / 5 < scaleRatio && scaleRatio < 5 / 4) {
       const [main, div] = scaleRatio < 1 ? axisIntervals(xSize, width) : axisIntervals(ySize, height)
-      renderXAxis(main, div, !zeroVisible)
-      renderYAxis(main, div, !zeroVisible)
+      prepareXAxis(main, div, !zeroVisible)
+      prepareYAxis(main, div, !zeroVisible)
     } else {
-      renderXAxis(...axisIntervals(xSize, width), !zeroVisible)
-      renderYAxis(...axisIntervals(ySize, height), !zeroVisible)
-    }
-    ctx.strokeStyle = 'white'
-    ctx.fillStyle = 'black'
-    ctx.lineWidth = 2
-    ctx.globalAlpha = 1
-    for (const { text, x, y, align, baseline } of labels) {
-      ctx.textAlign = align
-      ctx.textBaseline = baseline
-      ctx.strokeText(text, x, y)
-    }
-    for (const { text, x, y, align, baseline } of labels) {
-      ctx.textAlign = align
-      ctx.textBaseline = baseline
-      ctx.fillText(text, x, y)
+      prepareXAxis(...axisIntervals(xSize, width), !zeroVisible)
+      prepareYAxis(...axisIntervals(ySize, height), !zeroVisible)
     }
     ctx.restore()
+
+    const renderAxis = () => {
+      ctx.save()
+      ctx.lineWidth = this.rendering.axisWidth
+      ctx.strokeStyle = 'black'
+      for (const [sx, sy, ex, ey, opacity] of lines) {
+        ctx.globalAlpha = opacity
+        ctx.beginPath()
+        ctx.moveTo(sx, sy)
+        ctx.lineTo(ex, ey)
+        ctx.stroke()
+      }
+      ctx.restore()
+    }
+    const renderLabel = () => {
+      if (font == null) return
+      ctx.save()
+      ctx.font = font
+      ctx.strokeStyle = 'white'
+      ctx.fillStyle = 'black'
+      ctx.lineWidth = 2
+      ctx.globalAlpha = 1
+      for (const { text, x, y, align, baseline } of labels) {
+        ctx.textAlign = align
+        ctx.textBaseline = baseline
+        ctx.strokeText(text, x, y)
+      }
+      for (const { text, x, y, align, baseline } of labels) {
+        ctx.textAlign = align
+        ctx.textBaseline = baseline
+        ctx.fillText(text, x, y)
+      }
+      ctx.restore()
+    }
+    return { renderAxis, renderLabel }
   }
 }
