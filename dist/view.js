@@ -331,9 +331,10 @@ var View = /** @class */ (function () {
         var ctx = canvas.getContext('2d');
         if (!ctx)
             return;
-        this.needsRender = !this.isCalculationCompleted();
-        if (!this.calcPaused && calculate)
+        if (!this.calcPaused && calculate) {
             this.calculate();
+            this.needsRender = !this.isCalculationCompleted();
+        }
         ctx.clearRect(0, 0, width, height);
         if (this.rendering.background != null && this.rendering.background !== 'transparent') {
             ctx.fillStyle = this.rendering.background;
