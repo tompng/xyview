@@ -219,6 +219,7 @@ var View = /** @class */ (function () {
             this.updateSize(__assign({ width: this.width, height: this.height }, size));
         if (viewport)
             this.updateViewport(__assign(__assign({}, this.viewport), viewport));
+        this.render(false);
     };
     View.prototype.panelRange = function () {
         var _a = this, width = _a.width, height = _a.height, viewport = _a.viewport, panelSize = _a.panelSize;

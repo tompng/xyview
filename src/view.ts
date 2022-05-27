@@ -169,6 +169,7 @@ export class View {
     if (rendering) this.updateRendering({ ...this.rendering, ...rendering })
     if (size) this.updateSize({ width: this.width, height: this.height, ...size })
     if (viewport) this.updateViewport({ ...this.viewport, ...viewport })
+    this.render(false)
   }
   panelRange() {
     const { width, height, viewport, panelSize } = this
