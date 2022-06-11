@@ -8,4 +8,4 @@ export {
   UpdateAttributes,
 } from './view'
 
-export type { ParsedFormula, ParsedEquation, ParsedDefinition, ParsedError } from './renderer'
+export type { ParsedFormula, ParsedEquation, ParsedDefinition, ParsedError } from './parser'

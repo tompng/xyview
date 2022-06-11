@@ -1,4 +1,5 @@
-import { parseFormulas, ParsedFormula, render, render1D, ParsedEquation } from './renderer'
+import { parseFormulas, ParsedFormula, ParsedEquation } from './parser'
+import { render1D, render2D } from './renderer'
 import { texToPlain } from 'numcore'
 export type Size = { width: number; height: number }
 
@@ -228,7 +229,7 @@ export class View {
             canvas.getContext('2d')?.clearRect(0, 0, canvasSize, canvasSize)
             const renderOption = { lineWidth, color, fillAlpha: fillAlpha ?? 0.5 }
             if (parsed.calcType === 'xy') {
-              render(canvas, panelSize, offset, range, parsed, renderOption)
+              render2D(canvas, panelSize, offset, range, parsed, renderOption)
             } else {
               render1D(canvas, panelSize, offset, range, parsed, renderOption)
             }
