@@ -45,9 +45,9 @@ export function render2D(
     ctx.globalAlpha = fillAlpha
   }
   const plotPoints: number[] = []
-  const skipCalcDot = !fillMode.negative && !fillMode.positive && !fillMode.zero
+  const hasFill = fillMode.negative || fillMode.positive || fillMode.zero
   function calcDot(xMin: number, xMax: number, yMin: number, yMax: number) {
-    if (skipCalcDot) return
+    if (!hasFill) return
     const x0 = 0.75 * xMin + 0.25 * xMax
     const x1 = 0.25 * xMin + 0.75 * xMax
     const y0 = 0.75 * yMin + 0.25 * yMax
@@ -84,7 +84,7 @@ export function render2D(
         const v10 = values[ix + 1]
         const v01 = nextValues[ix]
         const v11 = nextValues[ix + 1]
-        if (fillMode.negative || fillMode.positive || fillMode.zero) {
+        if (hasFill) {
           if (fillMode.zero && valueFunc(x0 + dx / 2, y0 + dy / 2) === 0) {
             fill(x0, y0, 1)
           } else if (fillMode.negative) {
@@ -151,7 +151,15 @@ export function render2D(
   ctx.fill()
 }
 
-function calc1DRange(formula: ParsedEquation1D, size: number, min: number, max: number) {
+type RangeResult1D = {
+  fills: [number, number][]
+  plots: number[]
+  alphaFills: [number, number, number][]
+}
+type CurveResult = number[][]
+export type CalcResult1D = RangeResult1D | CurveResult
+
+export function calc1DRange(formula: ParsedEquation1D, size: number, min: number, max: number): RangeResult1D {
   const { valueFunc, rangeFunc, fillMode } = formula
   const fillMask = fillModeToMask(fillMode)
   type Range = [number, number]
@@ -161,9 +169,9 @@ function calc1DRange(formula: ParsedEquation1D, size: number, min: number, max: 
   const alphaFills: [number, number, number][] = []
   const plots: number[] = []
   const { BOTH } = RangeResults
-  const skipCalcDot = !fillMode.negative && !fillMode.positive && !fillMode.zero
+  const hasFill = fillMode.negative || fillMode.positive || fillMode.zero
   function calcDot(min: number, max: number) {
-    if (skipCalcDot) return
+    if (!hasFill) return
     const v0 = valueFunc((min * 7 + max) / 8)
     const v1 = valueFunc((min * 5 + 3 * max) / 8)
     const v2 = valueFunc((min * 3 + 5 * max) / 8)
@@ -188,7 +196,7 @@ function calc1DRange(formula: ParsedEquation1D, size: number, min: number, max: 
       const x1 = x0 + d
       const v0 = values[i]
       const v1 = values[i + 1]
-      if (fillMode.negative || fillMode.positive || fillMode.zero) {
+      if (hasFill) {
         if (fillMode.zero && valueFunc(x0 + d / 2) === 0) {
           fills.push([x0, x1])
         } else if (fillMode.negative) {
@@ -229,7 +237,7 @@ function calc1DRange(formula: ParsedEquation1D, size: number, min: number, max: 
   return { fills, plots, alphaFills }
 }
 
-function calc1DValues(formula: ParsedEquation1D, size: number, min: number, max: number) {
+export function calc1DCurves(formula: ParsedEquation1D, size: number, min: number, max: number): CurveResult {
   const { valueFunc, rangeFunc } = formula
   type Range = [number, number]
   let ranges: Range[] = [[min, max]]
@@ -275,6 +283,7 @@ export function render1D(
   offset: number,
   range: RenderingRange,
   formula: ParsedEquation1D,
+  result: RangeResult1D | CurveResult,
   renderMode: {
     color: string
     lineWidth: number
@@ -293,7 +302,6 @@ export function render1D(
   ctx.globalAlpha = fillAlpha
   const isXCalc = formula.calcType === 'x' || formula.calcType === 'fx'
   const [baseOffset, baseFactor, fOffset, fFactor] = isXCalc ? [xOffset, xFactor, yOffset, yFactor] : [yOffset, yFactor, xOffset, xFactor]
-  const [baseAxisMin, baseAxisMax] = isXCalc ? [range.xMin, range.xMax] : [range.yMin, range.yMax]
   if (!isXCalc) {
     ctx.rotate(Math.PI / 2)
     ctx.scale(1, -1)
@@ -302,7 +310,7 @@ export function render1D(
   ctx.rect(0, offset, 2 * offset + size, size)
   ctx.clip()
   if (formula.calcType === 'x' || formula.calcType === 'y') {
-    const { fills, plots, alphaFills } = calc1DRange(formula, size, baseAxisMin, baseAxisMax)
+    const { fills, plots, alphaFills } = result as RangeResult1D
     const fill = (a: number, b: number) => ctx.fillRect(baseOffset + baseFactor * a, offset, baseFactor * (b - a), size)
     const plot = (a: number) => ctx.fillRect(baseOffset + baseFactor * a - lineWidth / 2, offset, lineWidth, size)
     ctx.fillStyle = ctx.strokeStyle = renderMode.color
@@ -315,7 +323,7 @@ export function render1D(
     ctx.globalAlpha = 1
     for (const v of plots) plot(v)
   } else {
-    const curves = calc1DValues(formula, size, baseAxisMin, baseAxisMax)
+    const curves = result as CurveResult
     ctx.fillStyle = ctx.strokeStyle = renderMode.color
     ctx.globalAlpha = fillAlpha
     if (fillMode.positive || fillMode.negative) {
@@ -353,7 +361,6 @@ export function render1D(
         ctx.stroke()
       }
     }
-
   }
   ctx.restore()
 }
