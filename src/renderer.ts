@@ -20,19 +20,32 @@ function convertAST(ast: UniqASTNode, mode: CompareMode): [UniqASTNode, CompareM
     return [ast, mode]
   }
 }
+type FillMode = {
+  positive: boolean
+  negative: boolean
+  zero: boolean
+}
 
-export type ParsedEquation = {
+type ValueFunction1D = (x: number) => number
+type RangeFunction1D = (min: number, max: number) => ReturnType<RangeFunction2D>
+export type ParsedEquation2D = {
   type: 'eq'
-  valueFuncCode: string
+  key: string
+  fillMode: FillMode
   valueFunc: ValueFunction2D
   rangeFunc: RangeFunction2D
-  mode: NonNullable<CompareMode>
-  fillMode: {
-    positive: boolean
-    negative: boolean
-    zero: boolean
-  }
+  calcType: 'xy'
 }
+export type ParsedEquation1D = {
+  type: 'eq'
+  key: string
+  fillMode: FillMode
+  valueFunc: ValueFunction1D
+  rangeFunc: RangeFunction1D
+  calcType: 'x' | 'y' | 'fx' | 'fy'
+}
+
+export type ParsedEquation = ParsedEquation1D | ParsedEquation2D
 export type ParsedBlank = { type: 'blank' }
 export type ParsedDefinition = { type: 'func' | 'var'; name: string }
 export type ParsedError = { type: 'error', error: string }
@@ -59,11 +72,52 @@ export function parseFormulas(expressions: string[]): ParsedFormula[] {
     const negative = mode.includes('<')
     const zero = mode.includes('=')
     const fillMode = { positive, negative, zero }
+    const rangeOption = { pos: positive, neg: negative, eq: zero, zero }
     try {
+      if (typeof ast === 'object' && (ast.op === '-' || ast.op === '+') && ast.args.some(arg => typeof arg === 'string')) {
+        const [left, right] = ast.args
+        const lDeps = extractVariables(left)
+        const rDeps = extractVariables(right)
+        if (lDeps.length <= 1 && rDeps.length <= 1 && lDeps[0] !== rDeps[0]) {
+          if (typeof left === 'string') {
+            const valueFuncCode = astToValueFunctionCode(ast, [left])
+            const valueFunc: ValueFunction1D = eval(valueFuncCode)
+            const rangeFunc: RangeFunction1D = eval(astToRangeFunctionCode(ast, [left], rangeOption))
+            return {
+              type: 'eq',
+              key: `${left} left ${mode} ${valueFuncCode}`,
+              valueFunc,
+              rangeFunc,
+              calcType: `f${left as 'x' | 'y'}`,
+              fillMode
+            }
+          } else if (typeof right === 'string') {
+            const valueFuncCode = astToValueFunctionCode(ast, [right])
+            const valueFunc: ValueFunction1D = eval(valueFuncCode)
+            const rangeFunc: RangeFunction1D = eval(astToRangeFunctionCode(ast, [right], { pos: negative, neg: positive, eq: zero, zero }))
+            return {
+              type: 'eq',
+              key: `${right} right ${mode} ${valueFuncCode}`,
+              valueFunc,
+              rangeFunc,
+              calcType: `f${right as 'x' | 'y'}`,
+              fillMode: { positive: negative, negative: positive, zero }
+            }
+          }
+        }
+      }
+      const deps = extractVariables(ast) as ('x' | 'y')[]
+      if (deps.length === 1) {
+        const [varname] = deps
+        const valueFuncCode = astToValueFunctionCode(ast, [varname])
+        const valueFunc: ValueFunction1D = eval(valueFuncCode)
+        const rangeFunc: RangeFunction1D = eval(astToRangeFunctionCode(ast, [varname], rangeOption))
+        return { type: 'eq', key: `${varname} ${mode} ${valueFuncCode}`, calcType: varname, valueFunc, rangeFunc, mode, fillMode }
+      }
       const valueFuncCode = astToValueFunctionCode(ast, ['x', 'y'])
       const valueFunc: ValueFunction2D = eval(valueFuncCode)
-      const rangeFunc: RangeFunction2D = eval(astToRangeFunctionCode(ast, ['x', 'y'], { pos: positive, neg: negative, eq: zero, zero }))
-      return { type: 'eq', valueFuncCode, valueFunc, rangeFunc, mode, fillMode }
+      const rangeFunc: RangeFunction2D = eval(astToRangeFunctionCode(ast, ['x', 'y'], rangeOption))
+      return { type: 'eq', calcType: 'xy', key: `xy ${mode} ${valueFuncCode}`, valueFunc, rangeFunc, fillMode }
     } catch (e) {
       return { type: 'error', error: String(e) }
     }
@@ -76,7 +130,7 @@ export function render(
   size: number,
   offset: number,
   range: RenderingRange,
-  formula: ParsedEquation,
+  formula: ParsedEquation2D,
   renderMode: {
     color: string
     lineWidth: number
@@ -209,4 +263,20 @@ export function render(
   }
   ctx.globalAlpha = 1
   ctx.fill()
+}
+
+export function render1D(
+  canvas: HTMLCanvasElement,
+  size: number,
+  offset: number,
+  range: RenderingRange,
+  formula: ParsedEquation1D,
+  renderMode: {
+    color: string
+    lineWidth: number
+    fillAlpha: number
+  }
+) {
+
+
 }

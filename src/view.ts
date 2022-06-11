@@ -1,4 +1,4 @@
-import { parseFormulas, ParsedFormula, render, ParsedEquation } from './renderer'
+import { parseFormulas, ParsedFormula, render, render1D, ParsedEquation } from './renderer'
 import { texToPlain } from 'numcore'
 export type Size = { width: number; height: number }
 
@@ -104,10 +104,9 @@ export class View {
     if (isEqual(this.formulas.map(extractText), inputs.map(extractText))) {
       formulas = inputs.map(({ color, fillAlpha }, i) => ({ ...this.formulas[i], color, fillAlpha }))
     } else {
-      const cacheKey = (parsed: ParsedEquation) => `${parsed.mode} ${parsed.valueFuncCode}`
       const cache = new Map<string, ParsedEquation>()
       for (const formula of this.formulas) {
-        if (formula.parsed.type === 'eq') cache.set(cacheKey(formula.parsed), formula.parsed)
+        if (formula.parsed.type === 'eq') cache.set(formula.parsed.key, formula.parsed)
       }
       const textFormulas = inputs.map(({ tex, plain }) => {
         try {
@@ -121,7 +120,7 @@ export class View {
         const error = textFormulas[index].error
         if (error) return { ...input, parsed: { type: 'error', error } }
         const parsed = parseds[index]
-        const fromCache = (parsed.type === 'eq' && cache.get(cacheKey(parsed))) || parsed
+        const fromCache = (parsed.type === 'eq' && cache.get(parsed.key)) || parsed
         return ({ ...input, parsed: fromCache })
       })
     }
@@ -227,7 +226,12 @@ export class View {
           if (parsed.type === 'eq' && color != null && color !== 'transparent') {
             canvas.width = canvas.height = canvasSize
             canvas.getContext('2d')?.clearRect(0, 0, canvasSize, canvasSize)
-            render(canvas, panelSize, offset, range, parsed, { lineWidth, color, fillAlpha: fillAlpha ?? 0.5 })
+            const renderOption = { lineWidth, color, fillAlpha: fillAlpha ?? 0.5 }
+            if (parsed.calcType === 'xy') {
+              render(canvas, panelSize, offset, range, parsed, renderOption)
+            } else {
+              render1D(canvas, panelSize, offset, range, parsed, renderOption)
+            }
           } else {
             canvas.width = canvas.height = 0
           }
