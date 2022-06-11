@@ -1,36 +1,25 @@
-import { CompareMode, ValueFunction2D, RangeFunction2D } from 'numcore';
-export declare type ParsedEquation = {
-    type: 'eq';
-    valueFuncCode: string;
-    valueFunc: ValueFunction2D;
-    rangeFunc: RangeFunction2D;
-    mode: NonNullable<CompareMode>;
-    fillMode: {
-        positive: boolean;
-        negative: boolean;
-        zero: boolean;
-    };
-};
-export declare type ParsedBlank = {
-    type: 'blank';
-};
-export declare type ParsedDefinition = {
-    type: 'func' | 'var';
-    name: string;
-};
-export declare type ParsedError = {
-    type: 'error';
-    error: string;
-};
-export declare type ParsedFormula = ParsedEquation | ParsedDefinition | ParsedError | ParsedBlank;
-export declare function parseFormulas(expressions: string[]): ParsedFormula[];
+import { ParsedEquation1D, ParsedEquation2D } from './parser';
 declare type RenderingRange = {
     xMin: number;
     xMax: number;
     yMin: number;
     yMax: number;
 };
-export declare function render(canvas: HTMLCanvasElement, size: number, offset: number, range: RenderingRange, formula: ParsedEquation, renderMode: {
+export declare function render2D(canvas: HTMLCanvasElement, size: number, offset: number, range: RenderingRange, formula: ParsedEquation2D, renderMode: {
+    color: string;
+    lineWidth: number;
+    fillAlpha: number;
+}): void;
+declare type RangeResult1D = {
+    fills: [number, number][];
+    plots: number[];
+    alphaFills: [number, number, number][];
+};
+declare type CurveResult = number[][];
+export declare type CalcResult1D = RangeResult1D | CurveResult;
+export declare function calc1DRange(formula: ParsedEquation1D, size: number, min: number, max: number): RangeResult1D;
+export declare function calc1DCurves(formula: ParsedEquation1D, size: number, min: number, max: number): CurveResult;
+export declare function render1D(canvas: HTMLCanvasElement, size: number, offset: number, range: RenderingRange, formula: ParsedEquation1D, result: RangeResult1D | CurveResult, renderMode: {
     color: string;
     lineWidth: number;
     fillAlpha: number;
