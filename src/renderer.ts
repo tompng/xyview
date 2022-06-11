@@ -159,6 +159,8 @@ type RangeResult1D = {
 type CurveResult = number[][]
 export type CalcResult1D = RangeResult1D | CurveResult
 
+const subPixelStep = 64
+
 export function calc1DRange(formula: ParsedEquation1D, size: number, min: number, max: number): RangeResult1D {
   const { valueFunc, rangeFunc, fillMode } = formula
   const fillMask = fillModeToMask(fillMode)
@@ -168,7 +170,7 @@ export function calc1DRange(formula: ParsedEquation1D, size: number, min: number
   const fills: Range[] = []
   const alphaFills: [number, number, number][] = []
   const plots: number[] = []
-  const { BOTH } = RangeResults
+  const { BOTH, EQNAN } = RangeResults
   const hasFill = fillMode.negative || fillMode.positive || fillMode.zero
   function calcDot(min: number, max: number) {
     if (!hasFill) return
@@ -220,6 +222,7 @@ export function calc1DRange(formula: ParsedEquation1D, size: number, min: number
     const nextRanges: Range[] = []
     for (const [min, max] of ranges) {
       const result = rangeFunc(min, max)
+      if (result === EQNAN) continue
       if (result >= 0) {
         if (((fillMask >> result) & 1) === 1) fills.push([min, max])
       } else if (result === BOTH && currentSize <= 64) {
@@ -228,11 +231,47 @@ export function calc1DRange(formula: ParsedEquation1D, size: number, min: number
         const center = (min + max) / 2
         nextRanges.push([min, center], [center, max])
       } else {
-        calcDot(min, max)
+        nextRanges.push([min, max])
       }
     }
     ranges = nextRanges
     currentSize /= 2
+  }
+  const subPixelFills = new Map<number, number>()
+  type SubRange = [coord: number, min: number, max: number]
+  let subRanges: SubRange[] = ranges.map(([min, max]) => [min, min, max])
+  const subPixelFill = (coord: number, length: number) => {
+    subPixelFills.set(coord, (subPixelFills.get(coord) ?? 0) + length)
+  }
+  while (subRanges.length && subRanges.length <= size) {
+    const nextSubRanges: SubRange[] = []
+    for (const [coord, min, max] of subRanges) {
+      const result = rangeFunc(min, max)
+      if (result === EQNAN) continue
+      if (result >= 0) {
+        if (((fillMask >> result) & 1) === 1) subPixelFill(coord, max - min)
+      } else if (result === BOTH) {
+        const vmin = valueFunc(min)
+        const vmax = valueFunc(max)
+        if (fillMode.zero && (valueFunc((min + max) / 2) === 0 || (vmin === 0 && vmax === 0))) {
+          subPixelFill(coord, max - min)
+        } else if (vmin * vmax <= 0 && vmin !== vmax) {
+          const x = min - (max - min) * vmin / (vmax - vmin)
+          plots.push(x)
+          if (fillMode.positive) subPixelFill(coord, vmax > 0 ? max - x : x - min)
+          if (fillMode.negative) subPixelFill(coord, vmax > 0 ? x - min : max - x)
+        }
+      } else if (currentSize > 1 / subPixelStep) {
+        const center = (min + max) / 2
+        nextSubRanges.push([coord, min, center], [coord, center, max])
+      }
+    }
+    subRanges = nextSubRanges
+    currentSize /= 2
+  }
+  const delta = (max - min) / size
+  for (const [coord, value] of subPixelFills) {
+    alphaFills.push([coord, coord + delta, value / delta])
   }
   return { fills, plots, alphaFills }
 }
@@ -259,14 +298,14 @@ export function calc1DCurves(formula: ParsedEquation1D, size: number, min: numbe
       }
     }
   }
-  while (currentSize >= 1 && ranges.length) {
+  while (ranges.length && ranges.length <= size) {
     const nextRanges: Range[] = []
     for (const [min, max] of ranges) {
       const result = rangeFunc(min, max)
       if (result === EQNAN) continue
       if (result >= 0 || result === BOTH) {
-        calcFull(min, max, currentSize)
-      } else if (currentSize > 1) {
+        calcFull(min, max, Math.max(currentSize, 1))
+      } else if (currentSize > 1 / subPixelStep) {
         const center = (min + max) / 2
         nextRanges.push([min, center], [center, max])
       }
