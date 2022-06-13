@@ -74,7 +74,7 @@ export function parseFormulas(expressions: string[]): ParsedFormula[] {
     const fillMode = { positive, negative, zero }
     const rangeOption = { pos: positive, neg: negative, eq: zero, zero }
     try {
-      if (typeof ast === 'object' && (ast.op === '-' || ast.op === '+') && ast.args.some(arg => typeof arg === 'string')) {
+      if (typeof ast === 'object' && ast.op === '-' && ast.args.some(arg => typeof arg === 'string')) {
         const [left, right] = ast.args
         const lDeps = extractVariables(left)
         const rDeps = extractVariables(right)
