@@ -1,7 +1,8 @@
-import { parseFormulas, ParsedFormula, ParsedEquation } from './parser'
+import { parseFormulas, ParsedFormula, ParsedEquation, ParsedEquation1D } from './parser'
 import { render1D, render2D, CalcResult1D, calc1DRange, calc1DCurves } from './renderer'
 import { texToPlain } from 'numcore'
 export type Size = { width: number; height: number }
+import { TupleMap } from './tuplemap'
 
 export type RenderOption = {
   background: string | null
@@ -56,7 +57,7 @@ function isEqual(a: unknown, b: unknown): boolean {
 }
 
 type Panel = {
-  canvases: Map<string, HTMLCanvasElement>
+  canvases: TupleMap<RenderKey, HTMLCanvasElement>
   dx: number
   dy: number
   ix: number
@@ -80,11 +81,14 @@ const defaultRenderOption: RenderOption = {
   order: ['axis', 'graph', 'label']
 }
 
-function renderKeyOf({ color, fillAlpha, parsed }: Formula) {
-  if (parsed.type === 'eq' && color != null && color !== 'transparent') {
-    return [color, fillAlpha, parsed.key].join(' ')
-  }
+const fillAlphaFallback = 0.5
+
+type RenderKey = [string, number, ParsedEquation]
+function renderKeyOf({ color, fillAlpha, parsed }: Formula): RenderKey | null {
+  if (parsed.type !== 'eq' || !color || color === 'transparent') return null
+  return [color, fillAlpha ?? fillAlphaFallback, parsed]
 }
+
 export class View {
   canvas: HTMLCanvasElement
   width: number
@@ -97,7 +101,7 @@ export class View {
   panelSize = 64
   calculationTime = 100
   panels = new Map<string, Panel>()
-  cache = new Map<string, [ix: number | null, iy: number | null, delta: number, key: string, result: CalcResult1D]>()
+  cache = new TupleMap<[ix: number | null, iy: number | null, delta: number, parsed: ParsedEquation1D], CalcResult1D>()
   constructor(info: UpdateAttributes = {}) {
     this.rendering = { ...defaultRenderOption, ...info.rendering }
     this.viewport = { center: { x: 0, y: 0 }, sizePerPixel: { x: 1 / 256, y: 1 / 256 }, ...info.viewport }
@@ -193,7 +197,7 @@ export class View {
   isCalculationCompleted() {
     const { panels } = this
     const { ixMin, ixMax, iyMin, iyMax } = this.panelRange()
-    const formulaKeys: string[] = []
+    const formulaKeys: RenderKey[] = []
     for (const formula of this.formulas) {
       const key = renderKeyOf(formula)
       if (key) formulaKeys.push(key)
@@ -218,30 +222,24 @@ export class View {
     const dx = sizePerPixel.x * panelSize
     const dy = sizePerPixel.y * panelSize
     const newCanvas = () => unusedCanvases.pop() ?? document.createElement('canvas')
-    const fetchCache = ([ix, iy]: [number, null] | [null, number], key: string, fallback: () => CalcResult1D) => {
-      const i = ix != null ? ix :  iy
+    const fetchCache = ([ix, iy]: [number, null] | [null, number], formula: ParsedEquation1D, fallback: () => CalcResult1D) => {
       const delta = ix != null ? dx : dy
-      const cacheKey = [ix, iy, key].join(';')
+      const cacheKey = [ix, iy, delta, formula] as const
       let res = this.cache.get(cacheKey)
-      if (!res || res[2] !== delta) {
-        res = [ix, iy, delta, key, fallback()]
-        this.cache.set(cacheKey, res)
-      }
-      return res[4]
+      if (!res) this.cache.set(cacheKey, res = fallback())
+      return res
     }
-    for (const [key, panel] of panels.entries()) {
+    for (const [key, panel] of panels) {
       if (panel.ix < ixMin - 1 || panel.ix > ixMax + 1 || panel.iy < iyMin - 1 || panel.iy > iyMax + 1 || panel.dx !== dx || panel.dy !== dy) {
         panels.delete(key)
-        for (const [, canvas] of panel.canvases) {
-          unusedCanvases.push(canvas)
-        }
+        for (const [, canvas] of panel.canvases) unusedCanvases.push(canvas)
       }
     }
-    const formulaKeys = new Set(this.formulas.map(f => ('key' in f.parsed) && f.parsed.key))
+    const parsedFormulas = new Set(this.formulas.map(f => f.parsed))
     for (const key of this.cache.keys()) {
-      const [ix, iy, , formulaKey] = this.cache.get(key)!
+      const [ix, iy, , parsed] = key
       if (
-        !formulaKeys.has(formulaKey)
+        !parsedFormulas.has(parsed)
         || (ix != null && (ix < ixMin - 1 || ix > ixMax + 1))
         || (iy != null && (iy < iyMin - 1 || iy > iyMax + 1))
       ) this.cache.delete(key)
@@ -249,11 +247,11 @@ export class View {
     for (let ix = ixMin; ix <= ixMax; ix++) {
       for (let iy = iyMin; iy <= iyMax; iy++) {
         const positionKey = `${ix}/${iy}`
-        if (!panels.has(positionKey)) panels.set(positionKey, { ix, iy, dx, dy, canvases: new Map() })
+        if (!panels.has(positionKey)) panels.set(positionKey, { ix, iy, dx, dy, canvases: new TupleMap() })
         const panel = panels.get(positionKey)!
         const canvasSize = panelSize + 2 * offset
         const prevCanvases = panel.canvases
-        panel.canvases = new Map()
+        panel.canvases = new TupleMap()
         const range = {
           xMin: ix * dx,
           xMax: (ix + 1) * dx,
@@ -274,13 +272,13 @@ export class View {
           const canvas = newCanvas()
           canvas.width = canvas.height = canvasSize
           canvas.getContext('2d')?.clearRect(0, 0, canvasSize, canvasSize)
-          const renderOption = { lineWidth, color, fillAlpha: fillAlpha ?? 0.5 }
+          const renderOption = { lineWidth, color, fillAlpha: fillAlpha ?? fillAlphaFallback }
           if (parsed.calcType === 'xy') {
             render2D(canvas, panelSize, offset, range, parsed, renderOption)
           } else {
             const isXCalc = parsed.calcType === 'x' || parsed.calcType === 'fx'
             const [baseAxisMin, baseAxisMax] = isXCalc ? [range.xMin, range.xMax] : [range.yMin, range.yMax]
-            const result = fetchCache(isXCalc ? [ix, null]: [null, iy], parsed.key, () => (
+            const result = fetchCache(isXCalc ? [ix, null]: [null, iy], parsed, () => (
               parsed.calcType === 'x' || parsed.calcType === 'y' ? calc1DRange(parsed, panelSize, baseAxisMin, baseAxisMax) : calc1DCurves(parsed, panelSize, baseAxisMin, baseAxisMax)
             ))
             render1D(canvas, panelSize, offset, range, parsed, result, renderOption)
@@ -401,7 +399,7 @@ export class View {
       for (let iy = iyMin; iy <= iyMax; iy++) {
         const y = iy * mainInterval / division
         const canvasY = yConvert(y)
-        const opacity = (iy === 0 ? 1 : iy % division === 0 ? 0.5 : 0.1)
+        const opacity = iy === 0 ? 1 : iy % division === 0 ? 0.5 : 0.1
         lines.push([0, canvasY, width, canvasY, opacity])
         if (fontSize && iy % division === 0 && (renderZeroLabel || iy !== 0)) {
           const labelX = canvasX0 + fontSize / 4
