@@ -1,8 +1,10 @@
-import { ParsedFormula } from './renderer';
+import { ParsedFormula, ParsedEquation, ParsedEquation1D } from './parser';
+import { CalcResult1D } from './renderer';
 export declare type Size = {
     width: number;
     height: number;
 };
+import { TupleMap } from './tuplemap';
 export declare type RenderOption = {
     background: string | null;
     order: ('axis' | 'graph' | 'label')[];
@@ -44,12 +46,13 @@ export declare type UpdateAttributes = {
     calcPaused?: boolean;
 };
 declare type Panel = {
-    canvases: HTMLCanvasElement[];
+    canvases: TupleMap<RenderKey, HTMLCanvasElement>;
     dx: number;
     dy: number;
     ix: number;
     iy: number;
 };
+declare type RenderKey = [string, number, ParsedEquation];
 export declare class View {
     canvas: HTMLCanvasElement;
     width: number;
@@ -62,6 +65,7 @@ export declare class View {
     panelSize: number;
     calculationTime: number;
     panels: Map<string, Panel>;
+    cache: TupleMap<[ix: number | null, iy: number | null, delta: number, parsed: ParsedEquation1D], CalcResult1D>;
     constructor(info?: UpdateAttributes);
     updateFormulas(inputs: FormulaInput[]): Formula[];
     updateRendering(rendering: RenderOption): void;
