@@ -3,7 +3,7 @@
     "strict": true,
     "sourceMap": true,
     "downlevelIteration": true,
-    "target": "es5",
+    "target": "es6",
     "module": "esnext",
     "moduleResolution": "node",
     "lib": [
