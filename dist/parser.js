@@ -12,6 +12,27 @@ function convertAST(ast, mode) {
         return [ast, mode];
     }
 }
+function nanExpressionWarning(fRange) {
+    const result = fRange(-Infinity, Infinity);
+    if (result === numcore_1.RangeResults.EQNAN)
+        return 'Always NaN';
+}
+function constantConditionWarning(rangeOption, ...args) {
+    const result = args[0] === 1 ? args[1](-Infinity, Infinity) : args[1](-Infinity, Infinity, -Infinity, Infinity);
+    if (result === numcore_1.RangeResults.EQNAN)
+        return 'Always NaN';
+    const both = result === numcore_1.RangeResults.BOTH || result === numcore_1.RangeResults.HASGAP || result === numcore_1.RangeResults.HASNAN;
+    const pos = both || result === numcore_1.RangeResults.POSITIVE;
+    const neg = both || result === numcore_1.RangeResults.NEGATIVE;
+    const zero = both || result === numcore_1.RangeResults.EQZERO;
+    const other = result === numcore_1.RangeResults.OTHER;
+    const hasTrue = (neg && rangeOption.neg) || (zero && rangeOption.zero) || (pos && rangeOption.pos);
+    const hasFalse = other || (neg && !rangeOption.neg) || (zero && !rangeOption.zero) || (pos && !rangeOption.pos);
+    if (!hasFalse)
+        return 'Condition always true';
+    if (!hasTrue)
+        return 'Condition always false';
+}
 function parseFormulas(expressions) {
     const args = ['x', 'y'];
     const presentExpressions = [];
@@ -32,7 +53,7 @@ function parseFormulas(expressions) {
             return { type: 'error', error: String(parsed.error) };
         const [ast, mode] = convertAST(parsed.ast, parsed.mode);
         if (mode == null)
-            return { type: 'error', error: 'not an equation' };
+            return { type: 'error', error: 'Not an equation' };
         const positive = mode.includes('>');
         const negative = mode.includes('<');
         const zero = mode.includes('=');
@@ -55,7 +76,8 @@ function parseFormulas(expressions) {
                             valueFunc,
                             rangeFunc,
                             calcType: `f${axis}`,
-                            fillMode
+                            fillMode,
+                            warn: nanExpressionWarning(rangeFunc)
                         };
                     }
                     else if (typeof right === 'string') {
@@ -69,7 +91,8 @@ function parseFormulas(expressions) {
                             valueFunc,
                             rangeFunc,
                             calcType: `f${axis}`,
-                            fillMode: { positive: negative, negative: positive, zero }
+                            fillMode: { positive: negative, negative: positive, zero },
+                            warn: nanExpressionWarning(rangeFunc)
                         };
                     }
                 }
@@ -80,12 +103,16 @@ function parseFormulas(expressions) {
                 const valueFuncCode = (0, numcore_1.astToValueFunctionCode)(ast, [varname]);
                 const valueFunc = eval(valueFuncCode);
                 const rangeFunc = eval((0, numcore_1.astToRangeFunctionCode)(ast, [varname], rangeOption));
-                return { type: 'eq', key: `${varname} ${mode} ${valueFuncCode}`, calcType: varname, valueFunc, rangeFunc, mode, fillMode };
+                const key = `${varname} ${mode} ${valueFuncCode}`;
+                const warn = constantConditionWarning(rangeOption, 1, rangeFunc);
+                return { type: 'eq', key, calcType: varname, valueFunc, rangeFunc, fillMode, warn };
             }
             const valueFuncCode = (0, numcore_1.astToValueFunctionCode)(ast, ['x', 'y']);
             const valueFunc = eval(valueFuncCode);
             const rangeFunc = eval((0, numcore_1.astToRangeFunctionCode)(ast, ['x', 'y'], rangeOption));
-            return { type: 'eq', calcType: 'xy', key: `xy ${mode} ${valueFuncCode}`, valueFunc, rangeFunc, fillMode };
+            const key = `xy ${mode} ${valueFuncCode}`;
+            const warn = constantConditionWarning(rangeOption, 2, rangeFunc);
+            return { type: 'eq', calcType: 'xy', key, valueFunc, rangeFunc, fillMode, warn };
         }
         catch (e) {
             return { type: 'error', error: String(e) };

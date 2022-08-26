@@ -13,6 +13,7 @@ export declare type ParsedEquation2D = {
     valueFunc: ValueFunction2D;
     rangeFunc: RangeFunction2D;
     calcType: 'xy';
+    warn?: string;
 };
 export declare type ParsedEquation1D = {
     type: 'eq';
@@ -21,6 +22,7 @@ export declare type ParsedEquation1D = {
     valueFunc: ValueFunction1D;
     rangeFunc: RangeFunction1D;
     calcType: 'x' | 'y' | 'fx' | 'fy';
+    warn?: string;
 };
 export declare type ParsedEquation = ParsedEquation1D | ParsedEquation2D;
 export declare type ParsedBlank = {
