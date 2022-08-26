@@ -7,7 +7,8 @@ import {
   CompareMode,
   ValueFunction2D,
   extractVariables,
-  RangeFunction2D
+  RangeFunction2D,
+  RangeResults
 } from 'numcore'
 
 function convertAST(ast: UniqASTNode, mode: CompareMode): [UniqASTNode, CompareMode] {
@@ -18,6 +19,25 @@ function convertAST(ast: UniqASTNode, mode: CompareMode): [UniqASTNode, CompareM
   } else {
     return [ast, mode]
   }
+}
+
+function nanExpressionWarning(fRange: RangeFunction1D) {
+  const result = fRange(-Infinity, Infinity)
+  if (result === RangeResults.EQNAN) return 'Always NaN'
+}
+
+function constantConditionWarning(rangeOption: { pos: boolean; neg: boolean; zero: boolean }, ...args: [1, RangeFunction1D] | [2, RangeFunction2D]) {
+  const result = args[0] === 1 ? args[1](-Infinity, Infinity) : args[1](-Infinity, Infinity, -Infinity, Infinity)
+  if (result === RangeResults.EQNAN) return 'Always NaN'
+  const both = result === RangeResults.BOTH || result === RangeResults.HASGAP || result === RangeResults.HASNAN
+  const pos = both || result === RangeResults.POSITIVE
+  const neg = both || result === RangeResults.NEGATIVE
+  const zero = both || result === RangeResults.EQZERO
+  const other = result === RangeResults.OTHER
+  const hasTrue = (neg && rangeOption.neg) || (zero && rangeOption.zero) || (pos && rangeOption.pos)
+  const hasFalse = other || (neg && !rangeOption.neg) || (zero && !rangeOption.zero)|| (pos && !rangeOption.pos)
+  if (!hasFalse) return 'Condition always true'
+  if (!hasTrue) return 'Condition always false'
 }
 
 export type FillMode = {
@@ -35,6 +55,7 @@ export type ParsedEquation2D = {
   valueFunc: ValueFunction2D
   rangeFunc: RangeFunction2D
   calcType: 'xy'
+  warn?: string
 }
 export type ParsedEquation1D = {
   type: 'eq'
@@ -43,6 +64,7 @@ export type ParsedEquation1D = {
   valueFunc: ValueFunction1D
   rangeFunc: RangeFunction1D
   calcType: 'x' | 'y' | 'fx' | 'fy'
+  warn?: string
 }
 
 export type ParsedEquation = ParsedEquation1D | ParsedEquation2D
@@ -67,7 +89,7 @@ export function parseFormulas(expressions: string[]): ParsedFormula[] {
     if (parsed.type !== 'eq') return { type: parsed.type, name: parsed.name }
     if (parsed.ast == null) return { type: 'error', error: String(parsed.error) }
     const [ast, mode] = convertAST(parsed.ast, parsed.mode)
-    if (mode == null) return { type: 'error', error: 'not an equation' }
+    if (mode == null) return { type: 'error', error: 'Not an equation' }
     const positive = mode.includes('>')
     const negative = mode.includes('<')
     const zero = mode.includes('=')
@@ -90,7 +112,8 @@ export function parseFormulas(expressions: string[]): ParsedFormula[] {
               valueFunc,
               rangeFunc,
               calcType: `f${axis}`,
-              fillMode
+              fillMode,
+              warn: nanExpressionWarning(rangeFunc)
             }
           } else if (typeof right === 'string') {
             const axis = right === 'x' ? 'y' : 'x'
@@ -103,7 +126,8 @@ export function parseFormulas(expressions: string[]): ParsedFormula[] {
               valueFunc,
               rangeFunc,
               calcType: `f${axis}`,
-              fillMode: { positive: negative, negative: positive, zero }
+              fillMode: { positive: negative, negative: positive, zero },
+              warn: nanExpressionWarning(rangeFunc)
             }
           }
         }
@@ -114,12 +138,16 @@ export function parseFormulas(expressions: string[]): ParsedFormula[] {
         const valueFuncCode = astToValueFunctionCode(ast, [varname])
         const valueFunc: ValueFunction1D = eval(valueFuncCode)
         const rangeFunc: RangeFunction1D = eval(astToRangeFunctionCode(ast, [varname], rangeOption))
-        return { type: 'eq', key: `${varname} ${mode} ${valueFuncCode}`, calcType: varname, valueFunc, rangeFunc, mode, fillMode }
+        const key = `${varname} ${mode} ${valueFuncCode}`
+        const warn = constantConditionWarning(rangeOption, 1, rangeFunc)
+        return { type: 'eq', key, calcType: varname, valueFunc, rangeFunc, fillMode, warn }
       }
       const valueFuncCode = astToValueFunctionCode(ast, ['x', 'y'])
       const valueFunc: ValueFunction2D = eval(valueFuncCode)
       const rangeFunc: RangeFunction2D = eval(astToRangeFunctionCode(ast, ['x', 'y'], rangeOption))
-      return { type: 'eq', calcType: 'xy', key: `xy ${mode} ${valueFuncCode}`, valueFunc, rangeFunc, fillMode }
+      const key = `xy ${mode} ${valueFuncCode}`
+      const warn = constantConditionWarning(rangeOption, 2, rangeFunc)
+      return { type: 'eq', calcType: 'xy', key, valueFunc, rangeFunc, fillMode, warn }
     } catch (e) {
       return { type: 'error', error: String(e) }
     }
