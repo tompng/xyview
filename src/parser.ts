@@ -8,7 +8,8 @@ import {
   ValueFunction2D,
   extractVariables,
   RangeFunction2D,
-  RangeResults
+  RangeResults,
+  RangeMinMaxResult
 } from 'numcore'
 
 function convertAST(ast: UniqASTNode, mode: CompareMode): [UniqASTNode, CompareMode] {
@@ -48,6 +49,7 @@ export type FillMode = {
 
 type ValueFunction1D = (x: number) => number
 type RangeFunction1D = (min: number, max: number) => ReturnType<RangeFunction2D>
+type RangeMinMaxFunction1D = (min: number, max: number) => RangeMinMaxResult
 export type ParsedEquation2D = {
   type: 'eq'
   key: string
@@ -75,8 +77,10 @@ export type ParsedPoint = {
 export type ParsedParametric = {
   type: 'parametric'
   key: string
-  x: ValueFunction1D
-  y: ValueFunction1D
+  xValueFunc: ValueFunction1D
+  yValueFunc: ValueFunction1D
+  xRangeFunc: RangeMinMaxFunction1D
+  yRangeFunc: RangeMinMaxFunction1D
   warn?: string
 }
 
@@ -111,13 +115,13 @@ export function parseFormulas(expressions: string[]): ParsedFormula[] {
       if (deps.includes('x') || deps.includes('y')) return { type: 'error', error: 'Point cannot depend on x or y' }
       const xCode = astToValueFunctionCode(xAst, ['t'])
       const yCode = astToValueFunctionCode(yAst, ['t'])
-      const xFunc: ValueFunction1D = eval(xCode)
-      const yFunc: ValueFunction1D = eval(yCode)
       return {
         type: 'parametric',
         key: `point(${xCode},${yCode})`,
-        x: xFunc,
-        y: yFunc,
+        xValueFunc: eval(xCode),
+        yValueFunc: eval(yCode),
+        xRangeFunc: eval(astToRangeFunctionCode(xAst, ['t'], { range: true })),
+        yRangeFunc: eval(astToRangeFunctionCode(yAst, ['t'], { range: true }))
       }
     }
     if (parsed.type !== 'eq') return { type: parsed.type, name: parsed.name }
