@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.render1D = exports.calc1DCurves = exports.calc1DRange = exports.render2D = void 0;
+exports.renderPoint = exports.renderParametric = exports.render1D = exports.calc1DCurves = exports.calc1DRange = exports.render2D = void 0;
 const numcore_1 = require("numcore");
 function fillModeToMask(fillMode) {
     return ((fillMode.positive ? (1 << numcore_1.RangeResults.POSITIVE) : 0) +
@@ -353,3 +353,48 @@ function render1D(canvas, size, offset, range, formula, result, renderMode) {
     ctx.restore();
 }
 exports.render1D = render1D;
+function renderParametric(canvas, size, offset, range, formula, renderMode) {
+    const xFactor = size / (range.xMax - range.xMin);
+    const xOffset = offset - size * range.xMin / (range.xMax - range.xMin);
+    const yFactor = size / (range.yMax - range.yMin);
+    const yOffset = offset - size * range.yMin / (range.yMax - range.yMin);
+    const ctx = canvas.getContext('2d');
+    ctx.save();
+    ctx.beginPath();
+    const N = 512;
+    ctx.rect(0, 0, size, size);
+    ctx.clip();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = renderMode.color;
+    ctx.lineWidth = renderMode.lineWidth;
+    ctx.beginPath();
+    ctx.moveTo(xOffset + xFactor * formula.x(0), yOffset + yFactor * formula.y(0));
+    for (let i = 1; i <= N; i++) {
+        const t = i / N;
+        ctx.lineTo(xOffset + xFactor * formula.x(t), yOffset + yFactor * formula.y(t));
+    }
+    ctx.stroke();
+    ctx.restore();
+}
+exports.renderParametric = renderParametric;
+function renderPoint(canvas, size, offset, range, point, renderMode) {
+    const xFactor = size / (range.xMax - range.xMin);
+    const xOffset = offset - size * range.xMin / (range.xMax - range.xMin);
+    const yFactor = size / (range.yMax - range.yMin);
+    const yOffset = offset - size * range.yMin / (range.yMax - range.yMin);
+    const ctx = canvas.getContext('2d');
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, size, size);
+    ctx.clip();
+    ctx.fillStyle = ctx.strokeStyle = renderMode.color;
+    ctx.globalAlpha = renderMode.fillAlpha;
+    ctx.beginPath();
+    ctx.arc(xOffset + xFactor * point.x, yOffset + yFactor * point.y, renderMode.lineWidth * 2, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = renderMode.lineWidth;
+    ctx.stroke();
+    ctx.restore();
+}
+exports.renderPoint = renderPoint;

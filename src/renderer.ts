@@ -3,6 +3,7 @@ import {
   FillMode,
   ParsedEquation1D,
   ParsedEquation2D,
+  ParsedParametric,
 } from './parser'
 
 function fillModeToMask(fillMode: FillMode) {
@@ -356,5 +357,74 @@ export function render1D(
       }
     }
   }
+  ctx.restore()
+}
+
+export function renderParametric(
+  canvas: HTMLCanvasElement,
+  size: number,
+  offset: number,
+  range: RenderingRange,
+  tRange: [number, number],
+  formula: ParsedParametric,
+  renderMode: {
+    color: string
+    lineWidth: number
+    fillAlpha: number
+  }
+) {
+  const xFactor = size / (range.xMax - range.xMin)
+  const xOffset = offset - size * range.xMin / (range.xMax - range.xMin)
+  const yFactor = size / (range.yMax - range.yMin)
+  const yOffset = offset - size * range.yMin / (range.yMax - range.yMin)
+  const ctx = canvas.getContext('2d')!
+  ctx.save()
+  ctx.beginPath()
+  const N = 512
+  ctx.rect(0, 0, size, size)
+  ctx.clip()
+  ctx.globalAlpha = 1
+  ctx.strokeStyle = renderMode.color
+  ctx.lineWidth = renderMode.lineWidth
+  ctx.beginPath()
+  const [tBegin, tEnd] = tRange
+  ctx.moveTo(xOffset + xFactor * formula.x(tBegin), yOffset + yFactor * formula.y(tBegin))
+  for (let i = 1; i <= N; i++) {
+    const t = tBegin + i / N * (tEnd - tBegin)
+    ctx.lineTo(xOffset + xFactor * formula.x(t), yOffset + yFactor * formula.y(t))
+  }
+  ctx.stroke()
+  ctx.restore()
+}
+
+export function renderPoint(
+  canvas: HTMLCanvasElement,
+  size: number,
+  offset: number,
+  range: RenderingRange,
+  point: { x: number; y: number },
+  renderMode: {
+    color: string
+    lineWidth: number
+    fillAlpha: number
+  }
+) {
+  const xFactor = size / (range.xMax - range.xMin)
+  const xOffset = offset - size * range.xMin / (range.xMax - range.xMin)
+  const yFactor = size / (range.yMax - range.yMin)
+  const yOffset = offset - size * range.yMin / (range.yMax - range.yMin)
+  const ctx = canvas.getContext('2d')!
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(0, 0, size, size)
+  ctx.clip()
+  ctx.fillStyle = ctx.strokeStyle = renderMode.color
+  ctx.globalAlpha = renderMode.fillAlpha
+  ctx.beginPath()
+  ctx.arc(xOffset + xFactor * point.x, yOffset + yFactor * point.y, renderMode.lineWidth * 2, 0, 2 * Math.PI)
+  ctx.fill()
+  ctx.globalAlpha = 1
+  ctx.lineWidth = renderMode.lineWidth
+  ctx.stroke()
   ctx.restore()
 }

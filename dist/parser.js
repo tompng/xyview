@@ -35,6 +35,7 @@ function constantConditionWarning(rangeOption, ...args) {
 }
 function parseFormulas(expressions) {
     const args = ['x', 'y'];
+    const overridableArgs = ['t'];
     const presentExpressions = [];
     const indices = expressions.map(exp => {
         if (exp.match(/^\s*$/))
@@ -42,15 +43,40 @@ function parseFormulas(expressions) {
         presentExpressions.push(exp);
         return presentExpressions.length - 1;
     });
-    const results = (0, numcore_1.parse)(presentExpressions, args, numcore_1.presets2D);
+    const results = (0, numcore_1.parse)(presentExpressions, args, overridableArgs, numcore_1.presets2D);
     return indices.map(index => {
         if (index == null)
             return { type: 'blank' };
         const parsed = results[index];
+        if (parsed.type === 'point') {
+            if (parsed.axis == null || parsed.error)
+                return { type: 'error', error: String(parsed.error) };
+            if (parsed.axis.length !== 2)
+                return { type: 'error', error: 'Not 2D point' };
+            const [xAst, yAst] = parsed.axis;
+            if (typeof xAst === 'number' && typeof yAst === 'number') {
+                return { type: 'point', key: `point(${xAst},${yAst})`, x: xAst, y: yAst };
+            }
+            const deps = [...(0, numcore_1.extractVariables)(xAst), ...(0, numcore_1.extractVariables)(yAst)];
+            if (deps.includes('x') || deps.includes('y'))
+                return { type: 'error', error: 'Point cannot depend on x or y' };
+            const xCode = (0, numcore_1.astToValueFunctionCode)(xAst, ['t']);
+            const yCode = (0, numcore_1.astToValueFunctionCode)(yAst, ['t']);
+            const xFunc = eval(xCode);
+            const yFunc = eval(yCode);
+            return {
+                type: 'parametric',
+                key: `point(${xCode},${yCode})`,
+                x: xFunc,
+                y: yFunc,
+            };
+        }
         if (parsed.type !== 'eq')
             return { type: parsed.type, name: parsed.name };
         if (parsed.ast == null)
             return { type: 'error', error: String(parsed.error) };
+        if ((0, numcore_1.extractVariables)(parsed.ast).includes('t'))
+            return { type: 'error', error: 'Unknown parameter t' };
         const [ast, mode] = convertAST(parsed.ast, parsed.mode);
         if (mode == null)
             return { type: 'error', error: 'Not an equation' };

@@ -1,4 +1,4 @@
-import { ParsedFormula, ParsedEquation, ParsedEquation1D } from './parser';
+import { ParsedFormula, ParsedEquation, ParsedPoint, ParsedParametric, ParsedEquation1D } from './parser';
 import { CalcResult1D } from './renderer';
 export declare type Size = {
     width: number;
@@ -52,7 +52,7 @@ declare type Panel = {
     ix: number;
     iy: number;
 };
-declare type RenderKey = [string, number, ParsedEquation];
+declare type RenderKey = [string, number, ParsedEquation | ParsedPoint | ParsedParametric];
 export declare class View {
     canvas: HTMLCanvasElement;
     width: number;

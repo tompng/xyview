@@ -36,9 +36,12 @@ const defaultRenderOption = {
 };
 const fillAlphaFallback = 0.5;
 function renderKeyOf({ color, fillAlpha, parsed }) {
-    if (parsed.type !== 'eq' || !color || color === 'transparent')
+    if (!isRenderTarget(parsed) || !color || color === 'transparent')
         return null;
     return [color, fillAlpha !== null && fillAlpha !== void 0 ? fillAlpha : fillAlphaFallback, parsed];
+}
+function isRenderTarget(parsed) {
+    return parsed.type === 'eq' || parsed.type === 'point' || parsed.type === 'parametric';
 }
 class View {
     constructor(info = {}) {
@@ -66,7 +69,7 @@ class View {
         else {
             const cache = new Map();
             for (const formula of this.formulas) {
-                if (formula.parsed.type === 'eq')
+                if (isRenderTarget(formula.parsed))
                     cache.set(formula.parsed.key, formula.parsed);
             }
             const textFormulas = inputs.map(({ tex, plain }) => {
@@ -83,11 +86,11 @@ class View {
                 if (error)
                     return Object.assign(Object.assign({}, input), { parsed: { type: 'error', error } });
                 const parsed = parseds[index];
-                const fromCache = (parsed.type === 'eq' && cache.get(parsed.key)) || parsed;
+                const fromCache = (isRenderTarget(parsed) && cache.get(parsed.key)) || parsed;
                 return (Object.assign(Object.assign({}, input), { parsed: fromCache }));
             });
         }
-        const extractRendering = ({ parsed, color, fillAlpha }) => parsed.type === 'eq' ? { parsed, color, fillAlpha } : null;
+        const extractRendering = ({ parsed, color, fillAlpha }) => isRenderTarget(parsed) ? { parsed, color, fillAlpha } : null;
         if (!isEqual(this.formulas.map(extractRendering), formulas.map(extractRendering))) {
             this.needsRender = true;
         }
@@ -227,7 +230,7 @@ class View {
                 for (const formula of this.formulas) {
                     const { color, parsed, fillAlpha } = formula;
                     const renderKey = renderKeyOf(formula);
-                    if (!renderKey || parsed.type !== 'eq' || color == null)
+                    if (!isRenderTarget(parsed) || !renderKey || !color)
                         continue;
                     if (panel.canvases.has(renderKey))
                         continue;
@@ -241,7 +244,13 @@ class View {
                     canvas.width = canvas.height = canvasSize;
                     (_a = canvas.getContext('2d')) === null || _a === void 0 ? void 0 : _a.clearRect(0, 0, canvasSize, canvasSize);
                     const renderOption = { lineWidth, color, fillAlpha: fillAlpha !== null && fillAlpha !== void 0 ? fillAlpha : fillAlphaFallback };
-                    if (parsed.calcType === 'xy') {
+                    if (parsed.type === 'point') {
+                        (0, renderer_1.renderPoint)(canvas, panelSize, offset, range, parsed, renderOption);
+                    }
+                    else if (parsed.type === 'parametric') {
+                        (0, renderer_1.renderParametric)(canvas, panelSize, offset, range, parsed, renderOption);
+                    }
+                    else if (parsed.calcType === 'xy') {
                         (0, renderer_1.render2D)(canvas, panelSize, offset, range, parsed, renderOption);
                     }
                     else {
