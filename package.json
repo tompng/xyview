@@ -6,7 +6,7 @@
     "build": "tsc"
   },
   "dependencies": {
-    "numcore": "https://github.com/tompng/numcore.git"
+    "numcore": "../numcore"
   },
   "devDependencies": {
     "typescript": "*"

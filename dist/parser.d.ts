@@ -24,6 +24,19 @@ export declare type ParsedEquation1D = {
     calcType: 'x' | 'y' | 'fx' | 'fy';
     warn?: string;
 };
+export declare type ParsedPoint = {
+    type: 'point';
+    key: string;
+    x: number;
+    y: number;
+};
+export declare type ParsedParametric = {
+    type: 'parametric';
+    key: string;
+    x: ValueFunction1D;
+    y: ValueFunction1D;
+    warn?: string;
+};
 export declare type ParsedEquation = ParsedEquation1D | ParsedEquation2D;
 export declare type ParsedBlank = {
     type: 'blank';
@@ -36,6 +49,6 @@ export declare type ParsedError = {
     type: 'error';
     error: string;
 };
-export declare type ParsedFormula = ParsedEquation | ParsedDefinition | ParsedError | ParsedBlank;
+export declare type ParsedFormula = ParsedEquation | ParsedDefinition | ParsedError | ParsedBlank | ParsedPoint | ParsedParametric;
 export declare function parseFormulas(expressions: string[]): ParsedFormula[];
 export {};

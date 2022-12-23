@@ -1,5 +1,5 @@
-import { parseFormulas, ParsedFormula, ParsedEquation, ParsedEquation1D } from './parser'
-import { render1D, render2D, CalcResult1D, calc1DRange, calc1DCurves } from './renderer'
+import { parseFormulas, ParsedFormula, ParsedEquation, ParsedPoint, ParsedParametric, ParsedEquation1D } from './parser'
+import { render1D, render2D, CalcResult1D, calc1DRange, calc1DCurves, renderPoint, renderParametric } from './renderer'
 import { texToPlain } from 'numcore'
 export type Size = { width: number; height: number }
 import { TupleMap } from './tuplemap'
@@ -22,6 +22,7 @@ export type Viewport = {
 
 type FormulaAppearance = {
   color: string | null
+  tRange?: [number, number]
   fillAlpha?: number
 }
 
@@ -82,11 +83,16 @@ const defaultRenderOption: RenderOption = {
 }
 
 const fillAlphaFallback = 0.5
+const tRangeFallback = [0, 1] as [number, number]
 
-type RenderKey = [string, number, ParsedEquation]
-function renderKeyOf({ color, fillAlpha, parsed }: Formula): RenderKey | null {
-  if (parsed.type !== 'eq' || !color || color === 'transparent') return null
-  return [color, fillAlpha ?? fillAlphaFallback, parsed]
+type RenderKey = [string, number, number, number, ParsedEquation | ParsedPoint | ParsedParametric]
+function renderKeyOf({ color, fillAlpha, tRange, parsed }: Formula): RenderKey | null {
+  if (!isRenderTarget(parsed) || !color || color === 'transparent') return null
+  return [color, fillAlpha ?? fillAlphaFallback, (tRange ?? tRangeFallback)[0], (tRange ?? tRangeFallback)[1], parsed]
+}
+
+function isRenderTarget(parsed: ParsedFormula): parsed is ParsedEquation | ParsedPoint | ParsedParametric {
+  return parsed.type === 'eq' || parsed.type === 'point' || parsed.type === 'parametric'
 }
 
 export class View {
@@ -116,9 +122,9 @@ export class View {
     if (isEqual(this.formulas.map(extractText), inputs.map(extractText))) {
       formulas = inputs.map(({ color, fillAlpha }, i) => ({ ...this.formulas[i], color, fillAlpha }))
     } else {
-      const cache = new Map<string, ParsedEquation>()
+      const cache = new Map<string, ParsedEquation | ParsedPoint | ParsedParametric>()
       for (const formula of this.formulas) {
-        if (formula.parsed.type === 'eq') cache.set(formula.parsed.key, formula.parsed)
+        if (isRenderTarget(formula.parsed)) cache.set(formula.parsed.key, formula.parsed)
       }
       const textFormulas = inputs.map(({ tex, plain }) => {
         try {
@@ -132,11 +138,11 @@ export class View {
         const error = textFormulas[index].error
         if (error) return { ...input, parsed: { type: 'error', error } }
         const parsed = parseds[index]
-        const fromCache = (parsed.type === 'eq' && cache.get(parsed.key)) || parsed
+        const fromCache = (isRenderTarget(parsed) && cache.get(parsed.key)) || parsed
         return ({ ...input, parsed: fromCache })
       })
     }
-    const extractRendering = ({ parsed, color, fillAlpha }: Formula) => parsed.type === 'eq' ? { parsed, color, fillAlpha } : null
+    const extractRendering = ({ parsed, color, fillAlpha }: Formula) => isRenderTarget(parsed) ? { parsed, color, fillAlpha } : null
     if (!isEqual(this.formulas.map(extractRendering), formulas.map(extractRendering))) {
       this.needsRender = true
     }
@@ -261,7 +267,7 @@ export class View {
         for (const formula of this.formulas) {
           const { color, parsed, fillAlpha } = formula
           const renderKey = renderKeyOf(formula)
-          if (!renderKey || parsed.type !== 'eq' || color == null) continue
+          if (!isRenderTarget(parsed) || !renderKey || !color) continue
           if (panel.canvases.has(renderKey)) continue
           const prev = prevCanvases.get(renderKey)
           if (prev) {
@@ -273,7 +279,11 @@ export class View {
           canvas.width = canvas.height = canvasSize
           canvas.getContext('2d')?.clearRect(0, 0, canvasSize, canvasSize)
           const renderOption = { lineWidth, color, fillAlpha: fillAlpha ?? fillAlphaFallback }
-          if (parsed.calcType === 'xy') {
+          if (parsed.type === 'point') {
+            renderPoint(canvas, panelSize, offset, range, parsed, renderOption)
+          } else if (parsed.type === 'parametric') {
+            renderParametric(canvas, panelSize, offset, range, formula.tRange ?? tRangeFallback, parsed, renderOption)
+          } else if (parsed.calcType === 'xy') {
             render2D(canvas, panelSize, offset, range, parsed, renderOption)
           } else {
             const isXCalc = parsed.calcType === 'x' || parsed.calcType === 'fx'

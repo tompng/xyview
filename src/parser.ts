@@ -8,7 +8,8 @@ import {
   ValueFunction2D,
   extractVariables,
   RangeFunction2D,
-  RangeResults
+  RangeResults,
+  RangeMinMaxResult
 } from 'numcore'
 
 function convertAST(ast: UniqASTNode, mode: CompareMode): [UniqASTNode, CompareMode] {
@@ -48,6 +49,7 @@ export type FillMode = {
 
 type ValueFunction1D = (x: number) => number
 type RangeFunction1D = (min: number, max: number) => ReturnType<RangeFunction2D>
+type RangeMinMaxFunction1D = (min: number, max: number) => RangeMinMaxResult
 export type ParsedEquation2D = {
   type: 'eq'
   key: string
@@ -66,28 +68,65 @@ export type ParsedEquation1D = {
   calcType: 'x' | 'y' | 'fx' | 'fy'
   warn?: string
 }
+export type ParsedPoint = {
+  type: 'point'
+  key: string
+  x: number
+  y: number
+}
+export type ParsedParametric = {
+  type: 'parametric'
+  key: string
+  xValueFunc: ValueFunction1D
+  yValueFunc: ValueFunction1D
+  xRangeFunc: RangeMinMaxFunction1D
+  yRangeFunc: RangeMinMaxFunction1D
+  warn?: string
+}
 
 export type ParsedEquation = ParsedEquation1D | ParsedEquation2D
 export type ParsedBlank = { type: 'blank' }
 export type ParsedDefinition = { type: 'func' | 'var'; name: string }
 export type ParsedError = { type: 'error', error: string }
 
-export type ParsedFormula = ParsedEquation | ParsedDefinition | ParsedError | ParsedBlank
+export type ParsedFormula = ParsedEquation | ParsedDefinition | ParsedError | ParsedBlank | ParsedPoint | ParsedParametric
 
 export function parseFormulas(expressions: string[]): ParsedFormula[] {
   const args = ['x', 'y']
+  const overridableArgs = ['t']
   const presentExpressions: string[] = []
   const indices = expressions.map(exp => {
     if (exp.match(/^\s*$/)) return null
     presentExpressions.push(exp)
     return presentExpressions.length - 1
   })
-  const results = parse(presentExpressions, args, presets2D)
+  const results = parse(presentExpressions, args, overridableArgs, presets2D)
   return indices.map(index => {
     if (index == null) return { type: 'blank' }
     const parsed = results[index]
+    if (parsed.type === 'point') {
+      if (parsed.axis == null || parsed.error) return { type: 'error', error: String(parsed.error) }
+      if (parsed.axis.length !== 2) return { type: 'error', error: 'Not 2D point' }
+      const [xAst, yAst] = parsed.axis
+      if (typeof xAst === 'number' && typeof yAst === 'number') {
+        return { type: 'point', key: `point(${xAst},${yAst})`, x: xAst, y: yAst }
+      }
+      const deps = [...extractVariables(xAst), ...extractVariables(yAst)]
+      if (deps.includes('x') || deps.includes('y')) return { type: 'error', error: 'Point cannot depend on x or y' }
+      const xCode = astToValueFunctionCode(xAst, ['t'])
+      const yCode = astToValueFunctionCode(yAst, ['t'])
+      return {
+        type: 'parametric',
+        key: `point(${xCode},${yCode})`,
+        xValueFunc: eval(xCode),
+        yValueFunc: eval(yCode),
+        xRangeFunc: eval(astToRangeFunctionCode(xAst, ['t'], { range: true })),
+        yRangeFunc: eval(astToRangeFunctionCode(yAst, ['t'], { range: true }))
+      }
+    }
     if (parsed.type !== 'eq') return { type: parsed.type, name: parsed.name }
     if (parsed.ast == null) return { type: 'error', error: String(parsed.error) }
+    if (extractVariables(parsed.ast).includes('t')) return { type: 'error', error: 'Unknown parameter t' }
     const [ast, mode] = convertAST(parsed.ast, parsed.mode)
     if (mode == null) return { type: 'error', error: 'Not an equation' }
     const positive = mode.includes('>')

@@ -3,6 +3,7 @@ import {
   FillMode,
   ParsedEquation1D,
   ParsedEquation2D,
+  ParsedParametric,
 } from './parser'
 
 function fillModeToMask(fillMode: FillMode) {
@@ -356,5 +357,126 @@ export function render1D(
       }
     }
   }
+  ctx.restore()
+}
+
+export function renderParametric(
+  canvas: HTMLCanvasElement,
+  size: number,
+  offset: number,
+  range: RenderingRange,
+  tRange: [number, number],
+  formula: ParsedParametric,
+  renderMode: {
+    color: string
+    lineWidth: number
+    fillAlpha: number
+  }
+) {
+  const xFactor = size / (range.xMax - range.xMin)
+  const xOffset = offset - size * range.xMin / (range.xMax - range.xMin)
+  const yFactor = size / (range.yMax - range.yMin)
+  const yOffset = offset - size * range.yMin / (range.yMax - range.yMin)
+  const ctx = canvas.getContext('2d')!
+  ctx.save()
+  const N = 512
+  ctx.globalAlpha = 1
+  ctx.strokeStyle = renderMode.color
+  ctx.lineWidth = renderMode.lineWidth
+  ctx.beginPath()
+  const [tBegin, tEnd] = tRange
+  type Segment = [t0: number, t1: number, state: 0 | 1]
+  let segments: Segment[] = []
+  for (let i = 0; i < N; i++) segments.push([tBegin + (tEnd - tBegin) * i / N, tBegin + (tEnd - tBegin) * (i + 1) / N, 0])
+  const { xValueFunc, yValueFunc, xRangeFunc, yRangeFunc } = formula
+  const { EQNAN } = RangeResults
+  const xAreaMin = -xOffset / xFactor
+  const xAreaMax = (size - xOffset) / xFactor
+  const yAreaMin = -yOffset / yFactor
+  const yAreaMax = (size - yOffset) / yFactor
+  const drawSegments: [number, number][] = []
+  for (let level = 0; level < 16 && drawSegments.length < 65536 && segments.length < 65536; level++) {
+    const nextSegments: Segment[] = []
+    for (const [t0, t1] of segments) {
+      const xResult = xRangeFunc(t0, t1)
+      const yResult = yRangeFunc(t0, t1)
+      if (xResult === EQNAN || yResult === EQNAN) continue
+      const [xStat, xMin, xMax] = xResult
+      const [yStat, yMin, yMax] = yResult
+      const tc = (t0 + t1) / 2
+      if (xStat < 0 || yStat < 0) {
+        nextSegments.push([t0, tc, 0], [tc, t1, 0])
+      } else if (xAreaMin <= xMax && xMin <= xAreaMax && yAreaMin <= yMax && yMin <= yAreaMax) {
+        if (xAreaMin <= xMin && xMax <= xAreaMax && yAreaMin <= yMin && yMax <= yAreaMax) {
+          drawSegments.push([t0, t1])
+        } else {
+          nextSegments.push([t0, tc, 1], [tc, t1, 1])
+        }
+      }
+    }
+    segments = nextSegments
+  }
+  for (const [t0, t1, stat] of segments) if (stat) drawSegments.push([t0, t1])
+  for (const [t0, t1] of drawSegments) {
+    const tc = (t0 + t1) / 2
+    const x0 = xOffset + xFactor * xValueFunc(t0)
+    const y0 = yOffset + yFactor * yValueFunc(t0)
+    const xc = xOffset + xFactor * xValueFunc(tc)
+    const yc = yOffset + yFactor * yValueFunc(tc)
+    const x1 = xOffset + xFactor * xValueFunc(t1)
+    const y1 = yOffset + yFactor * yValueFunc(t1)
+    const l0 = (x0 - xc) ** 2 + (y0 - yc) ** 2
+    const l1 = (x1 - xc) ** 2 + (y1 - yc) ** 2
+    const l = Math.sqrt(Math.max(l0, l1))
+    const n = Math.min(Math.ceil(2 * l / 4), 32)
+    if (n <= 2) {
+      ctx.moveTo(x0, y0)
+      ctx.lineTo(xc, yc)
+      ctx.lineTo(x1, y1)
+    } else {
+      let x = x0
+      let y = y0
+      ctx.moveTo(x, y)
+      for (let i = 1; i <= n; i++) {
+        const t = t0 + (t1 - t0) * i / n
+        x = xOffset + xFactor * xValueFunc(t)
+        y = yOffset + yFactor * yValueFunc(t)
+        ctx.lineTo(x, y)
+      }
+    }
+  }
+  ctx.stroke()
+  ctx.restore()
+}
+
+export function renderPoint(
+  canvas: HTMLCanvasElement,
+  size: number,
+  offset: number,
+  range: RenderingRange,
+  point: { x: number; y: number },
+  renderMode: {
+    color: string
+    lineWidth: number
+    fillAlpha: number
+  }
+) {
+  const xFactor = size / (range.xMax - range.xMin)
+  const xOffset = offset - size * range.xMin / (range.xMax - range.xMin)
+  const yFactor = size / (range.yMax - range.yMin)
+  const yOffset = offset - size * range.yMin / (range.yMax - range.yMin)
+  const ctx = canvas.getContext('2d')!
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(0, 0, size, size)
+  ctx.clip()
+  ctx.fillStyle = ctx.strokeStyle = renderMode.color
+  ctx.globalAlpha = renderMode.fillAlpha
+  ctx.beginPath()
+  ctx.arc(xOffset + xFactor * point.x, yOffset + yFactor * point.y, renderMode.lineWidth * 2, 0, 2 * Math.PI)
+  ctx.fill()
+  ctx.globalAlpha = 1
+  ctx.lineWidth = renderMode.lineWidth
+  ctx.stroke()
   ctx.restore()
 }
