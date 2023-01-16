@@ -383,17 +383,18 @@ export function renderParametric(
   ctx.globalAlpha = 1
   ctx.strokeStyle = renderMode.color
   ctx.lineWidth = renderMode.lineWidth
-  ctx.beginPath()
   const [tBegin, tEnd] = tRange
   type Segment = [t0: number, t1: number, state: 0 | 1]
   let segments: Segment[] = []
   for (let i = 0; i < N; i++) segments.push([tBegin + (tEnd - tBegin) * i / N, tBegin + (tEnd - tBegin) * (i + 1) / N, 0])
   const { xValueFunc, yValueFunc, xRangeFunc, yRangeFunc } = formula
   const { EQNAN } = RangeResults
-  const xAreaMin = -xOffset / xFactor
-  const xAreaMax = (size - xOffset) / xFactor
-  const yAreaMin = -yOffset / yFactor
-  const yAreaMax = (size - yOffset) / yFactor
+  const xAreaMin = (offset - xOffset) / xFactor
+  const xAreaMax = (size + offset - xOffset) / xFactor
+  const yAreaMin = (offset - yOffset) / yFactor
+  const yAreaMax = (size + offset - yOffset) / yFactor
+  const xMargin = offset / xFactor / 16
+  const yMargin = offset / xFactor / 16
   const drawSegments: [number, number][] = []
   for (let level = 0; level < 16 && drawSegments.length < 65536 && segments.length < 65536; level++) {
     const nextSegments: Segment[] = []
@@ -407,7 +408,7 @@ export function renderParametric(
       if (xStat < 0 || yStat < 0) {
         nextSegments.push([t0, tc, 0], [tc, t1, 0])
       } else if (xAreaMin <= xMax && xMin <= xAreaMax && yAreaMin <= yMax && yMin <= yAreaMax) {
-        if (xAreaMin <= xMin && xMax <= xAreaMax && yAreaMin <= yMin && yMax <= yAreaMax) {
+        if (xAreaMin - xMargin <= xMin && xMax <= xAreaMax + xMargin && yAreaMin - yMargin <= yMin && yMax <= yAreaMax + yMargin) {
           drawSegments.push([t0, t1])
         } else {
           nextSegments.push([t0, tc, 1], [tc, t1, 1])
@@ -417,6 +418,9 @@ export function renderParametric(
     segments = nextSegments
   }
   for (const [t0, t1, stat] of segments) if (stat) drawSegments.push([t0, t1])
+  ctx.lineJoin = ctx.lineCap = 'round'
+  drawSegments.sort((a, b) => a[0] - b[0])
+  let prevT: number | undefined
   for (const [t0, t1] of drawSegments) {
     const tc = (t0 + t1) / 2
     const x0 = xOffset + xFactor * xValueFunc(t0)
@@ -429,23 +433,26 @@ export function renderParametric(
     const l1 = (x1 - xc) ** 2 + (y1 - yc) ** 2
     const l = Math.sqrt(Math.max(l0, l1))
     const n = Math.min(Math.ceil(2 * l / 4), 32)
-    if (n <= 2) {
+    if (prevT !== t0) {
+      if (prevT != null) ctx.stroke()
+      ctx.beginPath()
       ctx.moveTo(x0, y0)
+    }
+    prevT = t1
+    if (n <= 2) {
       ctx.lineTo(xc, yc)
       ctx.lineTo(x1, y1)
     } else {
-      let x = x0
-      let y = y0
-      ctx.moveTo(x, y)
       for (let i = 1; i <= n; i++) {
         const t = t0 + (t1 - t0) * i / n
-        x = xOffset + xFactor * xValueFunc(t)
-        y = yOffset + yFactor * yValueFunc(t)
-        ctx.lineTo(x, y)
+        ctx.lineTo(
+          xOffset + xFactor * xValueFunc(t),
+          yOffset + yFactor * yValueFunc(t)
+        )
       }
     }
   }
-  ctx.stroke()
+  if (prevT != null) ctx.stroke()
   ctx.restore()
 }
 

@@ -1,16 +1,16 @@
-import { View } from 'xyview'
+import { View, FormulaInput } from 'xyview'
 
 onload = () => {
-  const formulas = [
+  const formulas: FormulaInput[] = [
     { tex: 'x^4+y^4=1+\\frac{\\sin4\\theta}{2}', color: 'blue', fillAlpha: 0.5 },
     { plain: '(x*x+y*y-1+sin(5theta)/3)*(y-tan(4x-siny))*floor(x)>=0√(y+1-xx)', color: 'red', fillAlpha: 0.5 },
-    { plain: '', color: 'cyan' },
+    { plain: '(cost/2+sin5t/4+abs(cos7t)/8, sint/2+sin3t/4+abs(cos12t)/8)', color: 'cyan', tRange: [-Math.PI, Math.PI] },
     { plain: '', color: 'magenta' },
     { plain: '', color: 'yellow' },
   ]
   const view = new View({
     size: { width: 512, height: 512 },
-    formulas: [...formulas]
+    formulas: [...formulas],
   })
   document.body.append(view.canvas)
 
@@ -35,7 +35,7 @@ onload = () => {
   })
   function update() {
     view.update({ formulas })
-    for (const { input, index, message } of forms) {
+    for (const { index, message } of forms) {
       const parsed = view.formulas[index].parsed
       const error = 'error' in parsed ? parsed.error : undefined
       const warn = 'warn' in parsed ? parsed.warn : undefined

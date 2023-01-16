@@ -335,6 +335,7 @@ export class View {
           const right = Math.round(width / 2 + (panel.dx * (panel.ix + 1) - center.x) / sizePerPixel.x)
           const bottom = Math.round(height / 2 + (panel.dy * panel.iy - center.y) / sizePerPixel.y)
           const top = Math.round(height / 2 + (panel.dy * (panel.iy + 1) - center.y) / sizePerPixel.y)
+          const t = performance.now()
           ctx.drawImage(
             image,
             left - offsetX * (right - left) / panelSize,
@@ -342,6 +343,16 @@ export class View {
             (right - left) * image.width / panelSize,
             (top - bottom) * image.height / panelSize
           )
+          if (performance.now() - t > 1000) {
+            console.log(`DRAW ${image.width}x${image.height} ${performance.now() - t}`)
+            ;(window as any).errorImage = image
+            console.log(
+              left - offsetX * (right - left) / panelSize,
+              bottom - height - offsetY * (top - bottom) / panelSize,
+              (right - left) * image.width / panelSize,
+              (top - bottom) * image.height / panelSize
+            )
+          }
         }
       }
       ctx.restore()
